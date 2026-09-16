@@ -10,6 +10,8 @@ import { playlistsRouter } from "./playlists/playlists.routes.js";
 import { schedulesRouter } from "./schedules/schedules.routes.js";
 import { layoutsRouter } from "./layouts/layouts.routes.js";
 import { templateInstancesRouter, templatesRouter } from "./templates/templates.routes.js";
+import { offersRouter } from "./offers/offers.routes.js";
+import { campaignsRouter, winnersRouter } from "./campaigns/campaigns.routes.js";
 
 /** Mounts every domain router under /api/v1. Modules are added here as they are built. */
 export const apiRouter = Router();
@@ -27,3 +29,6 @@ apiRouter.use("/schedules", schedulesRouter);
 apiRouter.use("/layouts", layoutsRouter);
 apiRouter.use("/templates", templatesRouter);
 apiRouter.use("/template-instances", templateInstancesRouter);
+apiRouter.use("/offers", offersRouter);
+apiRouter.use("/campaigns", campaignsRouter);
+apiRouter.use("/winners", winnersRouter);

@@ -1,4 +1,5 @@
 import argon2 from "argon2";
+import { signAccess } from "../core/auth/tokens.js";
 import { prisma } from "../core/db/prisma.js";
 import type { CompanyRole, LicenseState } from "../generated/prisma/enums.js";
 import { api } from "./helpers.js";
@@ -34,6 +35,11 @@ export async function login(email: string, password: string) {
   const res = await api().post("/api/v1/auth/login").send({ email, password });
   if (res.status !== 200) throw new Error(`login failed: ${res.status} ${JSON.stringify(res.body)}`);
   return res.body.data as { accessToken: string; refreshToken: string };
+}
+
+/** Signs an access token directly, bypassing the login rate limiter for bulk test users. */
+export function tokenFor(user: { id: string; email: string; name: string; platformRole: "SUPER_ADMIN" | "CUSTOMER"; companyRole: CompanyRole | null; companyId: string | null }): string {
+  return signAccess({ id: user.id, email: user.email, name: user.name, platformRole: user.platformRole, companyRole: user.companyRole, companyId: user.companyId });
 }
 
 /** Creates a company with an Admin user and returns a ready-to-use bearer header. */
