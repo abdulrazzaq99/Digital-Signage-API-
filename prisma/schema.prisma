@@ -1,0 +1,751 @@
+// Digital Signage Platform — data model (spec section 18.1).
+// Every tenant-owned model carries companyId and is indexed on it.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Enums ----------
+
+enum PlatformRole {
+  SUPER_ADMIN
+  CUSTOMER
+}
+
+enum CompanyRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum LicenseState {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+  EXPIRED
+}
+
+enum ScreenStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+}
+
+enum PairingStatus {
+  UNPAIRED
+  PAIRED
+  REVOKED
+}
+
+enum PairingSessionStatus {
+  PENDING
+  CONSUMED
+  EXPIRED
+}
+
+enum Orientation {
+  LANDSCAPE
+  PORTRAIT
+}
+
+enum SyncState {
+  SYNCED
+  PENDING
+  SYNCING
+  FAILED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  PDF
+}
+
+enum MediaStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum DerivativeKind {
+  THUMBNAIL
+  PDF_PAGE
+  OPTIMIZED
+}
+
+enum PlaylistStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum TargetKind {
+  SCREEN
+  GROUP
+}
+
+enum AssignmentKind {
+  PLAYLIST
+  LAYOUT
+  TEMPLATE_INSTANCE
+  CANVAS
+}
+
+enum ZoneBindingKind {
+  MEDIA
+  PLAYLIST
+}
+
+enum OfferStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+  EXPIRED
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  ENDED
+  INACTIVE
+}
+
+enum AttemptOutcome {
+  WIN
+  LOSE
+}
+
+enum RedemptionStatus {
+  PENDING
+  REDEEMED
+}
+
+enum CanvasStatus {
+  DRAFT
+  ACTIVE
+  DEGRADED
+  INACTIVE
+}
+
+enum ActivityStatus {
+  SUCCESS
+  PENDING
+  FAILED
+}
+
+// ---------- Tenancy & identity ----------
+
+model Company {
+  id        String        @id @default(cuid())
+  code      String        @unique
+  name      String
+  status    CompanyStatus @default(ACTIVE)
+  website   String?
+  industry  String?
+  phone     String?
+  timezone  String        @default("UTC")
+  plan      String?
+  overLimit Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  users             User[]
+  license           License?
+  screens           Screen[]
+  screenGroups      ScreenGroup[]
+  mediaAssets       MediaAsset[]
+  playlists         Playlist[]
+  schedules         Schedule[]
+  layouts           Layout[]
+  templateInstances TemplateInstance[]
+  offerViews        OfferView[]
+  scratchAttempts   ScratchAttempt[]
+  canvasSets        CanvasSet[]
+  activityLogs      ActivityLog[]
+  pushSubscriptions PushSubscription[]
+  pairingSessions   PairingSession[]
+
+  @@index([status])
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  name         String
+  title        String?
+  phone        String?
+  platformRole PlatformRole @default(CUSTOMER)
+  companyRole  CompanyRole?
+  companyId    String?
+  company      Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  isActive     Boolean      @default(true)
+  invitedAt    DateTime?
+  lastLoginAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  refreshTokens      RefreshToken[]
+  passwordResets     PasswordReset[]
+  offerViews         OfferView[]
+  scratchAttempts    ScratchAttempt[]
+  scratchWinners     ScratchWinner[]
+  pushSubscriptions  PushSubscription[]
+  activityLogs       ActivityLog[]
+  uploadedMedia      MediaAsset[]       @relation("UploadedBy")
+  publishedAssignments ScreenAssignment[] @relation("PublishedBy")
+
+  @@index([companyId])
+  @@index([companyId, isActive])
+}
+
+model RefreshToken {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique
+  familyId     String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+  userAgent    String?
+  ip           String?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model License {
+  id          String       @id @default(cuid())
+  companyId   String       @unique
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  screenLimit Int
+  state       LicenseState @default(ACTIVE)
+  overLimit   Boolean      @default(false)
+  expiresAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([state])
+}
+
+// ---------- Screens ----------
+
+model PairingSession {
+  id         String               @id @default(cuid())
+  code       String               @unique
+  deviceId   String
+  model      String?
+  playerVersion String?
+  appVersion String?
+  status     PairingSessionStatus @default(PENDING)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  screenId   String?
+  companyId  String?
+  company    Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdAt  DateTime             @default(now())
+
+  @@index([deviceId])
+  @@index([status, expiresAt])
+}
+
+model Screen {
+  id                   String        @id @default(cuid())
+  companyId            String
+  company              Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name                 String
+  location             String?
+  orientation          Orientation   @default(LANDSCAPE)
+  status               ScreenStatus  @default(OFFLINE)
+  pairingStatus        PairingStatus @default(PAIRED)
+  tags                 String[]      @default([])
+  deviceCredentialHash String?       @unique
+  lastSeenAt           DateTime?
+  manifestVersion      Int           @default(0)
+  ackVersion           Int           @default(0)
+  syncState            SyncState     @default(SYNCED)
+  isPersonal           Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  device       ScreenDevice?
+  groups       ScreenGroupMember[]
+  assignment   ScreenAssignment?
+  heartbeats   PlayerHeartbeat[]
+  canvasMember CanvasMember?
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, createdAt])
+}
+
+model ScreenDevice {
+  id            String   @id @default(cuid())
+  screenId      String   @unique
+  screen        Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  deviceId      String   @unique
+  model         String?
+  playerVersion String?
+  appVersion    String?
+  firmware      String?
+  resolution    String?
+  ip            String?
+  storageFree   BigInt?
+  storageTotal  BigInt?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model ScreenGroup {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members ScreenGroupMember[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model ScreenGroupMember {
+  groupId  String
+  group    ScreenGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  screenId String
+  screen   Screen      @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  addedAt  DateTime    @default(now())
+
+  @@id([groupId, screenId])
+  @@index([screenId])
+}
+
+model PlayerHeartbeat {
+  id       String   @id @default(cuid())
+  screenId String
+  screen   Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  at       DateTime @default(now())
+  payload  Json
+
+  @@index([screenId, at])
+}
+
+// ---------- Media ----------
+
+model MediaAsset {
+  id           String      @id @default(cuid())
+  companyId    String
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name         String
+  type         MediaType
+  status       MediaStatus @default(UPLOADING)
+  mimeType     String
+  sizeBytes    BigInt      @default(0)
+  checksum     String?
+  storageKey   String      @unique
+  width        Int?
+  height       Int?
+  durationSec  Int?
+  pages        Int?
+  tags         String[]    @default([])
+  failureReason String?
+  uploadedById String?
+  uploadedBy   User?       @relation("UploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  derivatives   MediaDerivative[]
+  playlistItems PlaylistItem[]
+  zoneBindings  LayoutZone[]
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, type])
+  @@index([companyId, createdAt])
+}
+
+model MediaDerivative {
+  id         String         @id @default(cuid())
+  assetId    String
+  asset      MediaAsset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  kind       DerivativeKind
+  storageKey String         @unique
+  page       Int?
+  width      Int?
+  height     Int?
+  createdAt  DateTime       @default(now())
+
+  @@index([assetId])
+}
+
+// ---------- Playlists & scheduling ----------
+
+model Playlist {
+  id        String         @id @default(cuid())
+  companyId String
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  status    PlaylistStatus @default(DRAFT)
+  version   Int            @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  items     PlaylistItem[]
+  schedules Schedule[]
+  zoneBindings LayoutZone[]
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, updatedAt])
+}
+
+model PlaylistItem {
+  id          String     @id @default(cuid())
+  playlistId  String
+  playlist    Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  position    Int
+  assetId     String
+  asset       MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  durationSec Int
+  createdAt   DateTime   @default(now())
+
+  @@unique([playlistId, position])
+  @@index([assetId])
+}
+
+model Schedule {
+  id         String     @id @default(cuid())
+  companyId  String
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  playlistId String
+  playlist   Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  targetKind TargetKind
+  targetId   String
+  startsAt   DateTime
+  endsAt     DateTime?
+  timezone   String     @default("UTC")
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([companyId])
+  @@index([targetKind, targetId, startsAt])
+}
+
+model ScreenAssignment {
+  id            String         @id @default(cuid())
+  screenId      String         @unique
+  screen        Screen         @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  kind          AssignmentKind
+  refId         String
+  version       Int
+  activateAt    DateTime?
+  publishedAt   DateTime       @default(now())
+  publishedById String?
+  publishedBy   User?          @relation("PublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+
+  @@index([kind, refId])
+}
+
+// ---------- Layouts & templates ----------
+
+model Layout {
+  id        String   @id @default(cuid())
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  presetId  String
+  name      String
+  isPreset  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  zones LayoutZone[]
+
+  @@index([companyId])
+  @@index([isPreset])
+}
+
+model LayoutZone {
+  id          String           @id @default(cuid())
+  layoutId    String
+  layout      Layout           @relation(fields: [layoutId], references: [id], onDelete: Cascade)
+  index       Int
+  name        String
+  x           Float
+  y           Float
+  w           Float
+  h           Float
+  bindingKind ZoneBindingKind?
+  assetId     String?
+  asset       MediaAsset?      @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  playlistId  String?
+  playlist    Playlist?        @relation(fields: [playlistId], references: [id], onDelete: SetNull)
+
+  @@unique([layoutId, index])
+}
+
+model Template {
+  id          String      @id @default(cuid())
+  name        String
+  category    String
+  orientation Orientation @default(LANDSCAPE)
+  fields      Json
+  isGlobal    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  instances TemplateInstance[]
+
+  @@index([category])
+}
+
+model TemplateInstance {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  templateId String
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name       String
+  values     Json
+  outputKey  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+// ---------- Marketplace ----------
+
+model Offer {
+  id          String      @id @default(cuid())
+  title       String
+  category    String
+  status      OfferStatus @default(DRAFT)
+  summary     String
+  description String
+  contact     Json
+  instructions String
+  included    String[]    @default([])
+  steps       String[]    @default([])
+  imageKey    String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  views OfferView[]
+
+  @@index([status])
+  @@index([status, startsAt, endsAt])
+}
+
+model OfferView {
+  id        String   @id @default(cuid())
+  offerId   String
+  offer     Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  viewedAt  DateTime @default(now())
+
+  @@index([offerId, userId, viewedAt])
+  @@index([offerId, viewedAt])
+}
+
+// ---------- Notifications ----------
+
+model Notification {
+  id         String    @id @default(cuid())
+  title      String
+  body       String
+  audience   Json
+  deepLink   String?
+  scheduledAt DateTime?
+  sentAt     DateTime?
+  providerId String?
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
+}
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId  String?
+  company    Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  provider   String   @default("onesignal")
+  externalId String   @unique
+  platform   String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([companyId])
+}
+
+// ---------- Scratch & Win ----------
+
+model ScratchCampaign {
+  id                 String         @id @default(cuid())
+  title              String
+  description        String?
+  status             CampaignStatus @default(DRAFT)
+  startsAt           DateTime
+  endsAt             DateTime
+  maxAttempts        Int            @default(1)
+  requireOffersVisit Boolean        @default(false)
+  allocation         Json
+  artworkKey         String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  prizes   ScratchPrize[]
+  attempts ScratchAttempt[]
+
+  @@index([status, startsAt, endsAt])
+}
+
+model ScratchPrize {
+  id         String          @id @default(cuid())
+  campaignId String
+  campaign   ScratchCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name       String
+  value      String?
+  quantity   Int
+  remaining  Int
+  createdAt  DateTime        @default(now())
+
+  attempts ScratchAttempt[]
+  winners  ScratchWinner[]
+
+  @@index([campaignId])
+}
+
+model ScratchAttempt {
+  id             String          @id @default(cuid())
+  campaignId     String
+  campaign       ScratchCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId      String?
+  company        Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  idempotencyKey String          @unique
+  outcome        AttemptOutcome
+  prizeId        String?
+  prize          ScratchPrize?   @relation(fields: [prizeId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now())
+
+  winner ScratchWinner?
+
+  @@index([campaignId, userId])
+}
+
+model ScratchWinner {
+  id         String           @id @default(cuid())
+  attemptId  String           @unique
+  attempt    ScratchAttempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  prizeId    String
+  prize      ScratchPrize     @relation(fields: [prizeId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redemption RedemptionStatus @default(PENDING)
+  redeemedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  @@index([prizeId])
+  @@index([userId])
+}
+
+// ---------- Synchronized canvas ----------
+
+model CanvasSet {
+  id          String       @id @default(cuid())
+  companyId   String
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  status      CanvasStatus @default(DRAFT)
+  contentKind AssignmentKind?
+  contentRef  String?
+  activateAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  members CanvasMember[]
+
+  @@index([companyId])
+}
+
+model CanvasMember {
+  id       String    @id @default(cuid())
+  setId    String
+  set      CanvasSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  screenId String    @unique
+  screen   Screen    @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  position Int
+  ready    Boolean   @default(false)
+
+  @@unique([setId, position])
+}
+
+// ---------- Audit & infrastructure ----------
+
+model ActivityLog {
+  id           String         @id @default(cuid())
+  companyId    String?
+  company      Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  actorId      String?
+  actor        User?          @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action       String
+  resourceType String
+  resourceId   String?
+  status       ActivityStatus @default(SUCCESS)
+  summary      String
+  meta         Json?
+  createdAt    DateTime       @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([action, createdAt])
+  @@index([resourceType, resourceId])
+}
+
+model IdempotencyKey {
+  id             String   @id @default(cuid())
+  key            String
+  userId         String
+  route          String
+  responseStatus Int
+  responseBody   Json
+  createdAt      DateTime @default(now())
+
+  @@unique([key, userId])
+  @@index([createdAt])
+}
