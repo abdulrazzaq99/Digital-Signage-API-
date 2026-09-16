@@ -18,3 +18,17 @@ services:
   redis:
     image: redis:7-alpine
     ports: ["6380:6379"]
+
+  minio:
+    image: quay.io/minio/minio:latest
+    command: server /data --console-address ":9003"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    ports: ["9002:9000", "9003:9003"]
+    tmpfs: ["/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
