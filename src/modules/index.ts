@@ -8,6 +8,8 @@ import { playerRouter } from "./player/player.routes.js";
 import { mediaRouter } from "./media/media.routes.js";
 import { playlistsRouter } from "./playlists/playlists.routes.js";
 import { schedulesRouter } from "./schedules/schedules.routes.js";
+import { layoutsRouter } from "./layouts/layouts.routes.js";
+import { templateInstancesRouter, templatesRouter } from "./templates/templates.routes.js";
 
 /** Mounts every domain router under /api/v1. Modules are added here as they are built. */
 export const apiRouter = Router();
@@ -22,3 +24,6 @@ apiRouter.use("/player", playerRouter);
 apiRouter.use("/media", mediaRouter);
 apiRouter.use("/playlists", playlistsRouter);
 apiRouter.use("/schedules", schedulesRouter);
+apiRouter.use("/layouts", layoutsRouter);
+apiRouter.use("/templates", templatesRouter);
+apiRouter.use("/template-instances", templateInstancesRouter);
