@@ -44,8 +44,18 @@ export async function publishAssignment(input: { actor: AuthUser; companyId: str
     await logActivity({ companyId: input.companyId, actor: input.actor, action: `${input.kind.toLowerCase()}.published`, resourceType: input.kind.toLowerCase(), resourceId: input.refId, summary: `"${input.refName}" published to ${screens.length} screen${screens.length > 1 ? "s" : ""}`, meta: { screenIds: ids } }, tx);
     return { screens: results, version: Math.max(...results.map((r) => r.version)) };
   };
-  const result = input.tx ? await run(input.tx) : await withTransaction(run);
+  if (input.tx) {
+    // Inside a caller's transaction: the caller must call emitAssignmentUpdated after it commits,
+    // otherwise a fast player fetches the manifest before the new version is visible.
+    return run(input.tx);
+  }
+  const result = await withTransaction(run);
+  emitAssignmentUpdated(input, result);
+  return result;
+}
+
+/** Notifies players and dashboards about a publish. Call only after the writes are committed. */
+export function emitAssignmentUpdated(input: { companyId: string; kind: AssignmentKind; refId: string; activateAt?: Date | null }, result: PublishResult): void {
   for (const s of result.screens) emitToScreen(s.id, Events.assignmentUpdated, { screenId: s.id, version: s.version, kind: input.kind, refId: input.refId, activateAt: input.activateAt?.toISOString() ?? null });
   emitToCompany(input.companyId, Events.assignmentUpdated, { kind: input.kind, refId: input.refId, screenIds: result.screens.map((s) => s.id) });
-  return result;
 }

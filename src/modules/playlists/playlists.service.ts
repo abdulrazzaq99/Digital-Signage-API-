@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { publishAssignment } from "../../core/assignments/publish.js";
+import { emitAssignmentUpdated, publishAssignment } from "../../core/assignments/publish.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, tenantWhere, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { withTransaction, type Tx } from "../../core/db/transaction.js";
@@ -136,10 +136,14 @@ export const playlistsService = {
     const existing = await repo.findScoped(scope.companyId, id);
     if (!existing) throw new NotFoundError("Playlist");
     if (!existing.items.length) throw new ValidationError("Playlist has no items", undefined, "PLAYLIST_EMPTY");
-    return withTransaction(async (tx) => {
-      const result = await publishAssignment({ actor, companyId: existing.companyId, kind: "PLAYLIST", refId: id, refName: existing.name, target: body, tx });
+    const publishInput = { actor, companyId: existing.companyId, kind: "PLAYLIST" as const, refId: id, refName: existing.name, target: body };
+    const result = await withTransaction(async (tx) => {
+      const r = await publishAssignment({ ...publishInput, tx });
       await repo.update(id, { status: "PUBLISHED", version: { increment: 1 } }, tx);
-      return result;
+      return r;
     });
+    // Emitted after the commit so players fetching the manifest see the new version.
+    emitAssignmentUpdated(publishInput, result);
+    return result;
   },
 };
