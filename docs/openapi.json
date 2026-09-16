@@ -758,13 +758,22 @@
               },
               "publishedAt": {
                 "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "thumbnailUrl": {
+                "type": "string",
+                "nullable": true
               }
             },
             "required": [
               "kind",
               "refId",
               "version",
-              "publishedAt"
+              "publishedAt",
+              "name",
+              "thumbnailUrl"
             ]
           }
         },

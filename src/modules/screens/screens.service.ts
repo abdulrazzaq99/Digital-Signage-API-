@@ -4,12 +4,14 @@ import { PAIRING_CODE_TTL_SEC } from "../../config/constants.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, tenantWhere, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { randomToken, sha256 } from "../../core/auth/tokens.js";
+import { prisma } from "../../core/db/prisma.js";
 import { withTransaction } from "../../core/db/transaction.js";
 import { ConflictError, ForbiddenError, GoneError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
 import { Events } from "../../core/realtime/events.js";
 import { emitToCompany, emitToScreen } from "../../core/realtime/server.js";
 import { clearPresence } from "../../core/redis/presence.js";
+import { presignGet } from "../../core/storage/s3.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { licensesRepository } from "../licenses/licenses.repository.js";
 import { screensRepository as repo, type ScreenRow } from "./screens.repository.js";
@@ -17,14 +19,64 @@ import type { createGroupBody, listScreensQuery, pairBody, remoteCommandBody, up
 
 const pairingCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
 
-export function toScreenDto(s: ScreenRow) {
+type AssignmentSummary = { name: string; thumbnailUrl: string | null };
+const summaryKey = (kind: string, refId: string) => `${kind}:${refId}`;
+
+/**
+ * Assignments reference playlists, layouts, template instances, or canvases polymorphically.
+ * This resolves display data for a batch of screens with at most one query per kind.
+ */
+export async function resolveAssignments(rows: ScreenRow[]): Promise<Map<string, AssignmentSummary>> {
+  const byKind = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (!r.assignment) continue;
+    if (!byKind.has(r.assignment.kind)) byKind.set(r.assignment.kind, new Set());
+    byKind.get(r.assignment.kind)!.add(r.assignment.refId);
+  }
+  const ids = (kind: string) => [...(byKind.get(kind) ?? [])];
+  const out = new Map<string, AssignmentSummary>();
+
+  if (ids("PLAYLIST").length) {
+    const playlists = await prisma.playlist.findMany({
+      where: { id: { in: ids("PLAYLIST") } },
+      select: { id: true, name: true, items: { orderBy: { position: "asc" }, take: 1, select: { asset: { select: { type: true, storageKey: true, derivatives: { take: 1, select: { storageKey: true } } } } } } },
+    });
+    for (const p of playlists) {
+      const asset = p.items[0]?.asset;
+      const key = asset?.derivatives[0]?.storageKey ?? (asset?.type === "IMAGE" ? asset.storageKey : undefined);
+      out.set(summaryKey("PLAYLIST", p.id), { name: p.name, thumbnailUrl: key ? await presignGet(key) : null });
+    }
+  }
+  if (ids("LAYOUT").length) {
+    for (const l of await prisma.layout.findMany({ where: { id: { in: ids("LAYOUT") } }, select: { id: true, name: true } })) out.set(summaryKey("LAYOUT", l.id), { name: l.name, thumbnailUrl: null });
+  }
+  if (ids("TEMPLATE_INSTANCE").length) {
+    for (const t of await prisma.templateInstance.findMany({ where: { id: { in: ids("TEMPLATE_INSTANCE") } }, select: { id: true, name: true, outputKey: true } })) {
+      out.set(summaryKey("TEMPLATE_INSTANCE", t.id), { name: t.name, thumbnailUrl: t.outputKey ? await presignGet(t.outputKey) : null });
+    }
+  }
+  if (ids("CANVAS").length) {
+    for (const c of await prisma.canvasSet.findMany({ where: { id: { in: ids("CANVAS") } }, select: { id: true, name: true } })) out.set(summaryKey("CANVAS", c.id), { name: c.name, thumbnailUrl: null });
+  }
+  return out;
+}
+
+export function toScreenDto(s: ScreenRow, summaries: Map<string, AssignmentSummary> = new Map()) {
+  const summary = s.assignment ? summaries.get(summaryKey(s.assignment.kind, s.assignment.refId)) : undefined;
   return {
     id: s.id, companyId: s.companyId, name: s.name, location: s.location, orientation: s.orientation, status: s.status, syncState: s.syncState, tags: s.tags, isPersonal: s.isPersonal,
     lastSeenAt: s.lastSeenAt?.toISOString() ?? null, manifestVersion: s.manifestVersion, ackVersion: s.ackVersion, createdAt: s.createdAt.toISOString(),
     groups: s.groups.map((m) => m.group),
     device: s.device ? { deviceId: s.device.deviceId, model: s.device.model, playerVersion: s.device.playerVersion, appVersion: s.device.appVersion, firmware: s.device.firmware, resolution: s.device.resolution, ip: s.device.ip } : null,
-    assignment: s.assignment ? { kind: s.assignment.kind, refId: s.assignment.refId, version: s.assignment.version, publishedAt: s.assignment.publishedAt.toISOString() } : null,
+    assignment: s.assignment
+      ? { kind: s.assignment.kind, refId: s.assignment.refId, version: s.assignment.version, publishedAt: s.assignment.publishedAt.toISOString(), name: summary?.name ?? "", thumbnailUrl: summary?.thumbnailUrl ?? null }
+      : null,
   };
+}
+
+/** Single-screen convenience for the DTO with resolved assignment display data. */
+export async function toScreenDtoAsync(s: ScreenRow) {
+  return toScreenDto(s, await resolveAssignments([s]));
 }
 
 type GroupRow = NonNullable<Awaited<ReturnType<typeof repo.findGroup>>>;
@@ -45,13 +97,14 @@ export const screensService = {
     };
     const { skip, take } = paginate(q);
     const [rows, total] = await repo.list(where, skip, take);
-    return { data: rows.map(toScreenDto), meta: pageMeta(q, total) };
+    const summaries = await resolveAssignments(rows);
+    return { data: rows.map((r) => toScreenDto(r, summaries)), meta: pageMeta(q, total) };
   },
 
   async get(scope: TenantScope, id: string) {
     const s = await repo.findScoped(scope.companyId, id);
     if (!s || s.pairingStatus !== "PAIRED") throw new NotFoundError("Screen");
-    return toScreenDto(s);
+    return toScreenDtoAsync(s);
   },
 
   /** Called by the unpaired player to obtain a short-lived pairing code. */
@@ -107,7 +160,7 @@ export const screensService = {
       await logActivity({ companyId, actor, action: "screen.paired", resourceType: "screen", resourceId: created.id, summary: `${created.name} paired (${paired + 1} of ${license.screenLimit} licences used)` }, tx);
       return created;
     });
-    return toScreenDto(screen);
+    return toScreenDtoAsync(screen);
   },
 
   async update(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updateScreenBody>) {
@@ -125,7 +178,7 @@ export const screensService = {
       return repo.findScoped(existing.companyId, s.id, tx);
     });
     await logActivity({ companyId: existing.companyId, actor, action: "screen.updated", resourceType: "screen", resourceId: id, summary: `${updated!.name} updated`, meta: { fields: Object.keys(body) } });
-    return toScreenDto(updated!);
+    return toScreenDtoAsync(updated!);
   },
 
   async unpair(actor: AuthUser, scope: TenantScope, id: string) {

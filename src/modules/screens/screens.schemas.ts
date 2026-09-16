@@ -41,7 +41,7 @@ export const screenDto = z.object({
   lastSeenAt: z.string().nullable(), manifestVersion: z.number(), ackVersion: z.number(), createdAt: z.string(),
   groups: z.array(z.object({ id: z.string(), name: z.string() })),
   device: z.object({ deviceId: z.string(), model: z.string().nullable(), playerVersion: z.string().nullable(), appVersion: z.string().nullable(), firmware: z.string().nullable(), resolution: z.string().nullable(), ip: z.string().nullable() }).nullable(),
-  assignment: z.object({ kind: z.string(), refId: z.string(), version: z.number(), publishedAt: z.string() }).nullable(),
+  assignment: z.object({ kind: z.string(), refId: z.string(), version: z.number(), publishedAt: z.string(), name: z.string(), thumbnailUrl: z.string().nullable() }).nullable(),
 }).openapi("Screen");
 
 export const groupDto = z.object({ id: z.string(), name: z.string(), description: z.string().nullable(), screenCount: z.number(), onlineCount: z.number(), screenIds: z.array(z.string()), createdAt: z.string() }).openapi("ScreenGroup");

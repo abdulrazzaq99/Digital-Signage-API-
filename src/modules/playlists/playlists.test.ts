@@ -108,6 +108,12 @@ describe("publish", () => {
     expect(again.body.data.version).toBe(2);
     const detail = await api().get(`/api/v1/playlists/${p.id}`).set(ctx.auth);
     expect(detail.body.data.assignedTo).toHaveLength(3);
+
+    const screen = await api().get(`/api/v1/screens/${s1.id}`).set(ctx.auth);
+    expect(screen.body.data.assignment).toMatchObject({ kind: "PLAYLIST", refId: p.id, version: 2, name: "P" });
+    expect(screen.body.data.assignment).toHaveProperty("thumbnailUrl");
+    const list = await api().get("/api/v1/screens").set(ctx.auth);
+    expect(list.body.data.find((s: { id: string }) => s.id === s2.id).assignment.name).toBe("P");
   });
 
   it("blocks publishing with a suspended licence, empty playlists, and foreign screens", async () => {
