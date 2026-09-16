@@ -51,3 +51,30 @@ docker/             Dockerfile and compose files
 ```
 
 Each module follows the same shape. Routes declare the middleware chain and map to a controller. Controllers parse validated input and shape the response. Services hold business rules and throw typed `AppError`s. Repositories own Prisma queries and always take a tenant scope.
+
+## Seeded accounts
+
+| Role | Email | Password |
+|---|---|---|
+| Super Admin | admin@dsp.local | Admin123! |
+| Customer Admin (Acme Corp) | sarah.mitchell@acmecorp.com | Customer123! |
+
+## Smoke test against a running stack
+
+```bash
+npx tsx scripts/smoke.ts            # defaults to http://localhost:4000
+```
+
+Pairs a screen, connects the player socket, publishes a playlist, and asserts the real-time event and manifest.
+
+## Documentation
+
+- `docs/api.md` — auth, tenancy, envelopes, error codes, idempotency, pairing and upload sequences, real-time events
+- `docs/database.md` — ERD, table dictionary, enums, DBeaver connection, sample queries, backup and restore
+- `docs/openapi.json` — generated with `npm run docs:openapi`
+
+## Adding a module
+
+1. Create `src/modules/<name>/` with `<name>.schemas.ts` (Zod + OpenAPI registration), `<name>.repository.ts` (Prisma only), `<name>.service.ts` (rules, throws `AppError`), `<name>.controller.ts` (parse `req.validated`, send envelope), `<name>.routes.ts` (middleware chain).
+2. Mount the router in `src/modules/index.ts`.
+3. Add `<name>.test.ts` using the factories in `src/test/factories.ts`.
