@@ -12,6 +12,9 @@ import { layoutsRouter } from "./layouts/layouts.routes.js";
 import { templateInstancesRouter, templatesRouter } from "./templates/templates.routes.js";
 import { offersRouter } from "./offers/offers.routes.js";
 import { campaignsRouter, winnersRouter } from "./campaigns/campaigns.routes.js";
+import { notificationsRouter } from "./notifications/notifications.routes.js";
+import { activityRouter } from "./activity/activity.routes.js";
+import { canvasRouter } from "./canvas/canvas.routes.js";
 
 /** Mounts every domain router under /api/v1. Modules are added here as they are built. */
 export const apiRouter = Router();
@@ -32,3 +35,6 @@ apiRouter.use("/template-instances", templateInstancesRouter);
 apiRouter.use("/offers", offersRouter);
 apiRouter.use("/campaigns", campaignsRouter);
 apiRouter.use("/winners", winnersRouter);
+apiRouter.use("/notifications", notificationsRouter);
+apiRouter.use("/activity", activityRouter);
+apiRouter.use("/canvas", canvasRouter);

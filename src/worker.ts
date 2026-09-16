@@ -9,6 +9,7 @@ import { createRedisConnection } from "./core/redis/client.js";
 import { JobNames, QUEUE_NAME } from "./core/queue/queues.js";
 import { mediaConvert } from "./jobs/media.convert.js";
 import { templateRender } from "./jobs/template.render.js";
+import { notificationSend } from "./jobs/notification.send.js";
 
 /** BullMQ worker bootstrap; job processors are registered as modules are built. */
 logger.info({ env: env.NODE_ENV }, "Worker starting");
@@ -21,6 +22,8 @@ const worker = new Worker(
         return mediaConvert(job.data as { assetId: string; companyId: string });
       case JobNames.templateRender:
         return templateRender(job.data as { instanceId: string; companyId: string });
+      case JobNames.notificationSend:
+        return notificationSend(job.data as { notificationId: string });
       default:
         logger.warn({ name: job.name }, "unknown job");
     }
