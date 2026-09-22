@@ -1,7 +1,10 @@
 import jwt from "jsonwebtoken";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { env } from "../../config/env.js";
+import { sha256 } from "../../core/auth/tokens.js";
+import { redis } from "../../core/redis/client.js";
 import { createUser } from "../../test/factories.js";
+import { refreshGraceKey } from "./auth.service.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
 
 beforeEach(resetDatabase);
@@ -61,12 +64,38 @@ describe("POST /auth/refresh", () => {
     expect(second.status).toBe(200);
     expect(second.body.data.refreshToken).not.toBe(first.refreshToken);
 
-    // Reusing the rotated token must fail and revoke the family.
+    // Once the grace window has passed, reusing the rotated token must fail and revoke the family.
+    await redis.del(refreshGraceKey(sha256(first.refreshToken)));
     const reuse = await api().post("/api/v1/auth/refresh").send({ refreshToken: first.refreshToken });
     expect(reuse.status).toBe(401);
     expect(reuse.body.error.code).toBe("TOKEN_REUSED");
     const afterReuse = await api().post("/api/v1/auth/refresh").send({ refreshToken: second.body.data.refreshToken });
     expect(afterReuse.status).toBe(401);
+  });
+
+  it("returns the same new pair to concurrent refreshes with one token instead of logging the user out", async () => {
+    const user = await createUser();
+    const first = (await api().post("/api/v1/auth/login").send({ email: user.email, password: user.password })).body.data;
+    const refresh = () => api().post("/api/v1/auth/refresh").send({ refreshToken: first.refreshToken });
+    const [a, b] = await Promise.all([refresh(), refresh()]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    expect(b.body.data.refreshToken).toBe(a.body.data.refreshToken);
+    // A late retry inside the window gets the same pair too, and the session stays alive.
+    const retry = await api().post("/api/v1/auth/refresh").send({ refreshToken: first.refreshToken });
+    expect(retry.status).toBe(200);
+    expect(retry.body.data.refreshToken).toBe(a.body.data.refreshToken);
+    const next = await api().post("/api/v1/auth/refresh").send({ refreshToken: a.body.data.refreshToken });
+    expect(next.status).toBe(200);
+  });
+
+  it("does not revive a session through the grace window after logout", async () => {
+    const user = await createUser();
+    const first = (await api().post("/api/v1/auth/login").send({ email: user.email, password: user.password })).body.data;
+    const second = (await api().post("/api/v1/auth/refresh").send({ refreshToken: first.refreshToken })).body.data;
+    expect((await api().post("/api/v1/auth/logout").send({ refreshToken: second.refreshToken })).status).toBe(204);
+    const replay = await api().post("/api/v1/auth/refresh").send({ refreshToken: first.refreshToken });
+    expect(replay.status).toBe(401);
   });
 
   it("rejects garbage tokens", async () => {

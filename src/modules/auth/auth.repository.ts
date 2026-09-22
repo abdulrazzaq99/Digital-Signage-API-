@@ -8,7 +8,10 @@ export const authRepository = {
 
   createRefreshToken: (data: { userId: string; tokenHash: string; familyId: string; expiresAt: Date; userAgent?: string; ip?: string }) => prisma.refreshToken.create({ data }),
   findRefreshToken: (tokenHash: string) => prisma.refreshToken.findUnique({ where: { tokenHash } }),
-  rotateRefreshToken: (id: string, replacedById: string) => prisma.refreshToken.update({ where: { id }, data: { revokedAt: new Date(), replacedById } }),
+  /** Atomically marks a token as used. Returns false when another request already rotated it. */
+  claimRefreshToken: async (id: string) => (await prisma.refreshToken.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: new Date() } })).count === 1,
+  setReplacedBy: (id: string, replacedById: string) => prisma.refreshToken.update({ where: { id }, data: { replacedById } }),
+  familyIsActive: async (familyId: string) => (await prisma.refreshToken.count({ where: { familyId, revokedAt: null, expiresAt: { gt: new Date() } } })) > 0,
   revokeFamily: (familyId: string) => prisma.refreshToken.updateMany({ where: { familyId, revokedAt: null }, data: { revokedAt: new Date() } }),
   revokeAllForUser: (userId: string) => prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
 

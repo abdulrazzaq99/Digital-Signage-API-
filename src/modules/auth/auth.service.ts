@@ -1,10 +1,12 @@
 import argon2 from "argon2";
 import { nanoid } from "nanoid";
+import { REFRESH_REUSE_GRACE_SEC } from "../../config/constants.js";
 import { env } from "../../config/env.js";
 import type { AuthUser } from "../../core/auth/scope.js";
 import { randomToken, sha256, signAccess, signRefresh, ttlToMs, verifyRefresh } from "../../core/auth/tokens.js";
 import { ForbiddenError, UnauthorizedError, ValidationError } from "../../core/errors/AppError.js";
 import { logger } from "../../core/middleware/logger.js";
+import { redis } from "../../core/redis/client.js";
 import type { User } from "../../generated/prisma/client.js";
 import { authRepository as repo } from "./auth.repository.js";
 
@@ -30,6 +32,28 @@ async function issueTokens(user: User, familyId: string, meta?: { userAgent?: st
   return { accessToken: signAccess(toAuthUser(user)), refreshToken, expiresIn: Math.floor(ttlToMs(env.JWT_ACCESS_TTL) / 1000), user: toDto(user) };
 }
 
+export const refreshGraceKey = (tokenHash: string) => `refresh:grace:${tokenHash}`;
+
+/**
+ * A rotated token was presented again. Within the grace window (and while the session is still
+ * alive) answer with the pair issued at rotation; the winner of a simultaneous race may still be
+ * writing it, so wait briefly for a rotation that happened a moment ago. Otherwise it is a replay.
+ */
+async function reuseOrGrace(tokenHash: string, familyId: string, userId: string, rotatedAt: Date): Promise<TokenPair> {
+  const recent = Date.now() - rotatedAt.getTime() < 3000;
+  for (let i = 0; i < (recent ? 20 : 1); i++) {
+    const cached = await redis.get(refreshGraceKey(tokenHash));
+    if (cached) {
+      if (await repo.familyIsActive(familyId)) return JSON.parse(cached) as TokenPair;
+      break;
+    }
+    if (recent) await new Promise((r) => setTimeout(r, 100));
+  }
+  await repo.revokeFamily(familyId);
+  logger.warn({ userId, familyId }, "Refresh token reuse detected; family revoked");
+  throw new UnauthorizedError("Refresh token has been revoked", "TOKEN_REUSED");
+}
+
 export const authService = {
   async login(email: string, password: string, meta?: { userAgent?: string; ip?: string }): Promise<TokenPair> {
     const user = await repo.findUserByEmail(email);
@@ -41,21 +65,22 @@ export const authService = {
     return issueTokens(user, nanoid(21), meta);
   },
 
-  /** Rotates the refresh token. Reuse of an already-rotated token revokes the whole family. */
+  /**
+   * Rotates the refresh token. A token rotated within the last REFRESH_REUSE_GRACE_SEC returns the
+   * same new pair (parallel 401s, two tabs, a retried request); reuse after that revokes the family.
+   */
   async refresh(refreshToken: string, meta?: { userAgent?: string; ip?: string }): Promise<TokenPair> {
     const claims = verifyRefresh(refreshToken);
-    const stored = await repo.findRefreshToken(sha256(refreshToken));
+    const hash = sha256(refreshToken);
+    const stored = await repo.findRefreshToken(hash);
     if (!stored) throw new UnauthorizedError("Unknown refresh token", "INVALID_TOKEN");
-    if (stored.revokedAt) {
-      await repo.revokeFamily(stored.familyId);
-      logger.warn({ userId: stored.userId, familyId: stored.familyId }, "Refresh token reuse detected; family revoked");
-      throw new UnauthorizedError("Refresh token has been revoked", "TOKEN_REUSED");
-    }
     if (stored.expiresAt < new Date()) throw new UnauthorizedError("Refresh token expired", "REFRESH_EXPIRED");
+    if (stored.revokedAt || !(await repo.claimRefreshToken(stored.id))) return reuseOrGrace(hash, stored.familyId, stored.userId, stored.revokedAt ?? new Date());
     const user = await repo.findUserById(claims.sub);
     if (!user || !user.isActive) throw new UnauthorizedError("Account unavailable", "ACCOUNT_DISABLED");
     const pair = await issueTokens(user, stored.familyId, meta);
-    await repo.rotateRefreshToken(stored.id, sha256(pair.refreshToken));
+    await repo.setReplacedBy(stored.id, sha256(pair.refreshToken));
+    await redis.set(refreshGraceKey(hash), JSON.stringify(pair), "EX", REFRESH_REUSE_GRACE_SEC);
     return pair;
   },
 
