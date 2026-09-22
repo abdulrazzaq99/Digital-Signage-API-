@@ -1041,47 +1041,10 @@
               "name"
             ]
           },
-          "assets": {
+          "items": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "type": {
-                  "type": "string"
-                },
-                "url": {
-                  "type": "string"
-                },
-                "checksum": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "sizeBytes": {
-                  "type": "number"
-                },
-                "durationSec": {
-                  "type": "number"
-                },
-                "mimeType": {
-                  "type": "string"
-                },
-                "position": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "id",
-                "type",
-                "url",
-                "checksum",
-                "sizeBytes",
-                "durationSec",
-                "mimeType",
-                "position"
-              ]
+              "$ref": "#/components/schemas/ManifestItem"
             }
           },
           "layout": {
@@ -1121,6 +1084,12 @@
                     "refId": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ManifestItem"
+                      }
                     }
                   },
                   "required": [
@@ -1131,7 +1100,8 @@
                     "w",
                     "h",
                     "bindingKind",
-                    "refId"
+                    "refId",
+                    "items"
                   ]
                 }
               }
@@ -1140,37 +1110,6 @@
               "presetId",
               "zones"
             ]
-          },
-          "schedule": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "playlistId": {
-                  "type": "string"
-                },
-                "startsAt": {
-                  "type": "string"
-                },
-                "endsAt": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "timezone": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "playlistId",
-                "startsAt",
-                "endsAt",
-                "timezone"
-              ]
-            }
           },
           "canvas": {
             "type": "object",
@@ -1188,14 +1127,165 @@
               "activateAt": {
                 "type": "string",
                 "nullable": true
+              },
+              "viewport": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "width": {
+                    "type": "number"
+                  },
+                  "height": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ]
+              },
+              "content": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "refId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "refId"
+                ]
               }
             },
             "required": [
               "setId",
               "position",
               "total",
-              "activateAt"
+              "activateAt",
+              "viewport",
+              "content"
             ]
+          },
+          "schedule": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "playlistId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "targetKind": {
+                  "type": "string",
+                  "enum": [
+                    "SCREEN",
+                    "GROUP"
+                  ]
+                },
+                "startsAt": {
+                  "type": "string"
+                },
+                "endsAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "timezone": {
+                  "type": "string"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ManifestItem"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "playlistId",
+                "name",
+                "targetKind",
+                "startsAt",
+                "endsAt",
+                "timezone",
+                "items"
+              ]
+            }
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "mimeType": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "checksum": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "sizeBytes": {
+                  "type": "number"
+                },
+                "width": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "height": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "durationSec": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "sourceAssetId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "page": {
+                  "type": "number",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "mimeType",
+                "url",
+                "checksum",
+                "sizeBytes",
+                "width",
+                "height",
+                "durationSec",
+                "sourceAssetId",
+                "page"
+              ]
+            }
           }
         },
         "required": [
@@ -1206,10 +1296,30 @@
           "generatedAt",
           "activateAt",
           "assignment",
-          "assets",
+          "items",
           "layout",
+          "canvas",
           "schedule",
-          "canvas"
+          "assets"
+        ]
+      },
+      "ManifestItem": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "type": "string"
+          },
+          "position": {
+            "type": "number"
+          },
+          "durationSec": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "assetId",
+          "position",
+          "durationSec"
         ]
       },
       "HeartbeatBody": {
@@ -1430,6 +1540,25 @@
           "thumbnailUrl"
         ]
       },
+      "UploadUrl": {
+        "type": "object",
+        "properties": {
+          "asset": {
+            "$ref": "#/components/schemas/Media"
+          },
+          "uploadUrl": {
+            "type": "string"
+          },
+          "expiresInSec": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "asset",
+          "uploadUrl",
+          "expiresInSec"
+        ]
+      },
       "UploadUrlBody": {
         "type": "object",
         "properties": {
@@ -1594,6 +1723,10 @@
           "durationSec": {
             "type": "number"
           },
+          "page": {
+            "type": "number",
+            "nullable": true
+          },
           "asset": {
             "type": "object",
             "properties": {
@@ -1627,6 +1760,7 @@
           "id",
           "position",
           "durationSec",
+          "page",
           "asset"
         ]
       },
@@ -1650,6 +1784,10 @@
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 3600
+                },
+                "page": {
+                  "type": "integer",
+                  "minimum": 1
                 }
               },
               "required": [
@@ -1685,6 +1823,10 @@
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 3600
+                },
+                "page": {
+                  "type": "integer",
+                  "minimum": 1
                 }
               },
               "required": [
@@ -1706,6 +1848,10 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 3600
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
           },
           "position": {
             "type": "integer",
@@ -2234,6 +2380,69 @@
                   "type": "integer",
                   "minimum": 0,
                   "exclusiveMinimum": true
+                },
+                "box": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "w": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "h": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "w",
+                    "h"
+                  ]
+                },
+                "fontSize": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 0.5
+                },
+                "weight": {
+                  "type": "string",
+                  "enum": [
+                    "regular",
+                    "bold"
+                  ]
+                },
+                "align": {
+                  "type": "string",
+                  "enum": [
+                    "left",
+                    "center",
+                    "right"
+                  ]
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "fit": {
+                  "type": "string",
+                  "enum": [
+                    "cover",
+                    "contain"
+                  ]
                 }
               },
               "required": [
@@ -2316,6 +2525,69 @@
                   "type": "integer",
                   "minimum": 0,
                   "exclusiveMinimum": true
+                },
+                "box": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "w": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "h": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "w",
+                    "h"
+                  ]
+                },
+                "fontSize": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMinimum": true,
+                  "maximum": 0.5
+                },
+                "weight": {
+                  "type": "string",
+                  "enum": [
+                    "regular",
+                    "bold"
+                  ]
+                },
+                "align": {
+                  "type": "string",
+                  "enum": [
+                    "left",
+                    "center",
+                    "right"
+                  ]
+                },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "fit": {
+                  "type": "string",
+                  "enum": [
+                    "cover",
+                    "contain"
+                  ]
                 }
               },
               "required": [
@@ -2362,6 +2634,9 @@
           "rendered": {
             "type": "boolean"
           },
+          "rendering": {
+            "type": "boolean"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -2377,6 +2652,7 @@
           "values",
           "outputUrl",
           "rendered",
+          "rendering",
           "createdAt",
           "updatedAt"
         ]
@@ -3018,13 +3294,75 @@
           },
           "attemptsRemaining": {
             "type": "number"
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyAttempt"
+            }
           }
         },
         "required": [
           "eligible",
           "reason",
           "attemptsUsed",
-          "attemptsRemaining"
+          "attemptsRemaining",
+          "attempts"
+        ]
+      },
+      "MyAttempt": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "WIN",
+              "LOSE"
+            ]
+          },
+          "prize": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "value"
+            ]
+          },
+          "redemption": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "PENDING",
+              "REDEEMED",
+              null
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attemptId",
+          "outcome",
+          "prize",
+          "redemption",
+          "createdAt"
         ]
       },
       "AttemptResult": {
@@ -3186,6 +3524,13 @@
           "body": {
             "type": "string"
           },
+          "type": {
+            "$ref": "#/components/schemas/NotificationType"
+          },
+          "targetId": {
+            "type": "string",
+            "nullable": true
+          },
           "audience": {
             "anyOf": [
               {
@@ -3272,11 +3617,57 @@
           "id",
           "title",
           "body",
+          "type",
+          "targetId",
           "audience",
           "deepLink",
           "scheduledAt",
           "sentAt",
           "providerId",
+          "createdAt"
+        ]
+      },
+      "NotificationType": {
+        "type": "string",
+        "enum": [
+          "announcement",
+          "offer",
+          "campaign"
+        ]
+      },
+      "InboxNotification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/NotificationType"
+          },
+          "targetId": {
+            "type": "string",
+            "nullable": true
+          },
+          "sentAt": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "body",
+          "type",
+          "targetId",
+          "sentAt",
           "createdAt"
         ]
       },
@@ -3292,6 +3683,14 @@
             "type": "string",
             "minLength": 2,
             "maxLength": 500
+          },
+          "type": {
+            "$ref": "#/components/schemas/NotificationType"
+          },
+          "targetId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
           },
           "audience": {
             "anyOf": [
@@ -3507,6 +3906,12 @@
                 "status": {
                   "type": "string"
                 },
+                "online": {
+                  "type": "boolean"
+                },
+                "preloaded": {
+                  "type": "boolean"
+                },
                 "ready": {
                   "type": "boolean"
                 },
@@ -3523,6 +3928,8 @@
                 "location",
                 "position",
                 "status",
+                "online",
+                "preloaded",
                 "ready",
                 "synced",
                 "orientation"
@@ -4748,8 +5155,7 @@
           },
           {
             "schema": {
-              "type": "boolean",
-              "nullable": true
+              "type": "string"
             },
             "required": false,
             "name": "personal",
@@ -5671,6 +6077,7 @@
             "bearerAuth": []
           }
         ],
+        "description": "Creates the asset and a presigned PUT URL. The lifetime grows with the file size (15 minutes to 6 hours).",
         "requestBody": {
           "description": "",
           "content": {
@@ -5690,23 +6097,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "asset": {
-                          "$ref": "#/components/schemas/Media"
-                        },
-                        "uploadUrl": {
-                          "type": "string"
-                        },
-                        "expiresInSec": {
-                          "type": "number"
-                        }
-                      },
-                      "required": [
-                        "asset",
-                        "uploadUrl",
-                        "expiresInSec"
-                      ]
+                      "$ref": "#/components/schemas/UploadUrl"
                     },
                     "meta": {
                       "type": "object",
@@ -5723,6 +6114,76 @@
             }
           },
           "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/media/{id}/upload-url": {
+      "post": {
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "A fresh presigned PUT URL for an asset that is still UPLOADING or FAILED. Uploads left UPLOADING for 24 hours are deleted.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UploadUrl"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -5940,8 +6401,7 @@
           },
           {
             "schema": {
-              "type": "boolean",
-              "nullable": true,
+              "type": "string",
               "default": false
             },
             "required": false,
@@ -6809,8 +7269,7 @@
           },
           {
             "schema": {
-              "type": "boolean",
-              "nullable": true,
+              "type": "string",
               "default": false
             },
             "required": false,
@@ -9347,6 +9806,131 @@
             }
           },
           "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/inbox": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Sent notifications addressed to the caller (everyone, their company, or them), newest first.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/InboxNotification"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/{id}": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "One notification, if the caller is in its audience (any, for the Super Admin).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxNotification"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
