@@ -40,7 +40,7 @@ export async function resolveAssignments(rows: ScreenRow[]): Promise<Map<string,
   if (ids("PLAYLIST").length) {
     const playlists = await prisma.playlist.findMany({
       where: { id: { in: ids("PLAYLIST") } },
-      select: { id: true, name: true, items: { orderBy: { position: "asc" }, take: 1, select: { asset: { select: { type: true, storageKey: true, derivatives: { take: 1, select: { storageKey: true } } } } } } },
+      select: { id: true, name: true, items: { orderBy: { position: "asc" }, take: 1, select: { asset: { select: { type: true, storageKey: true, derivatives: { where: { kind: "THUMBNAIL" }, take: 1, select: { storageKey: true } } } } } } },
     });
     for (const p of playlists) {
       const asset = p.items[0]?.asset;

@@ -3,14 +3,33 @@ import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/
 import { publishBody, publishResultDto } from "../playlists/playlists.schemas.js";
 
 export const idParams = z.object({ id: z.string().min(1) });
-export const templateField = z.object({ key: z.string().min(1).max(40), label: z.string().min(1).max(80), type: z.enum(["text", "image", "color"]), required: z.boolean().default(false), max: z.number().int().positive().optional() });
+const fraction = z.number().min(0).max(1);
+/**
+ * A customer-editable field. The optional layout keys are the designer's deliverable (spec 10.1):
+ * where the field sits (`box`, fractions of the canvas), text size (`fontSize`, fraction of the
+ * height), weight, alignment and colour, and how an image fills its box (`fit`). Fields without a
+ * box are placed by the default layout. For an `image` field the value is a media asset ID.
+ */
+export const templateField = z.object({
+  key: z.string().min(1).max(40),
+  label: z.string().min(1).max(80),
+  type: z.enum(["text", "image", "color"]),
+  required: z.boolean().default(false),
+  max: z.number().int().positive().optional(),
+  box: z.object({ x: fraction, y: fraction, w: fraction.refine((v) => v > 0), h: fraction.refine((v) => v > 0) }).optional(),
+  fontSize: z.number().positive().max(0.5).optional(),
+  weight: z.enum(["regular", "bold"]).optional(),
+  align: z.enum(["left", "center", "right"]).optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  fit: z.enum(["cover", "contain"]).optional(),
+});
 export type TemplateField = z.infer<typeof templateField>;
 export const createTemplateBody = z.object({ name: z.string().trim().min(2).max(120), category: z.string().trim().min(2).max(60), orientation: z.enum(["LANDSCAPE", "PORTRAIT"]).default("LANDSCAPE"), fields: z.array(templateField).min(1).max(20) }).openapi("CreateTemplateBody");
 export const createInstanceBody = z.object({ templateId: z.string().min(1), name: z.string().trim().min(1).max(120), values: z.record(z.string(), z.string()) }).openapi("CreateTemplateInstanceBody");
 export const updateInstanceBody = z.object({ name: z.string().trim().min(1).max(120).optional(), values: z.record(z.string(), z.string()).optional() }).openapi("UpdateTemplateInstanceBody");
 
 export const templateDto = z.object({ id: z.string(), name: z.string(), category: z.string(), orientation: z.string(), fields: z.array(templateField), isGlobal: z.boolean(), usedIn: z.number(), createdAt: z.string() }).openapi("Template");
-export const instanceDto = z.object({ id: z.string(), templateId: z.string(), templateName: z.string(), name: z.string(), values: z.record(z.string(), z.string()), outputUrl: z.string().nullable(), rendered: z.boolean(), createdAt: z.string(), updatedAt: z.string() }).openapi("TemplateInstance");
+export const instanceDto = z.object({ id: z.string(), templateId: z.string(), templateName: z.string(), name: z.string(), values: z.record(z.string(), z.string()), outputUrl: z.string().nullable(), rendered: z.boolean(), rendering: z.boolean(), createdAt: z.string(), updatedAt: z.string() }).openapi("TemplateInstance");
 
 const tag = ["Templates"];
 const sec = [{ bearerAuth: [] }];

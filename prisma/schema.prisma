@@ -401,6 +401,9 @@ model MediaDerivative {
   page       Int?
   width      Int?
   height     Int?
+  mimeType   String?
+  sizeBytes  Int?
+  checksum   String?
   createdAt  DateTime       @default(now())
 
   @@index([assetId])
@@ -434,6 +437,8 @@ model PlaylistItem {
   position    Int
   assetId     String
   asset       MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  /// For a PDF: the one page to show. Null shows every page in order, each for durationSec.
+  page        Int?
   durationSec Int
   createdAt   DateTime   @default(now())
 
@@ -541,6 +546,10 @@ model TemplateInstance {
   outputSizeBytes Int?
   outputWidth     Int?
   outputHeight    Int?
+  /// A render is queued or running; the previous output (if any) stays live until it lands.
+  renderPending   Boolean @default(false)
+  /// Increases on every values change, so a render of older values never clears renderPending.
+  valuesVersion   Int     @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

@@ -16,6 +16,9 @@ interface FileRef {
   width: number | null;
   height: number | null;
   durationSec: number | null;
+  /** For a rendered PDF page: the PDF it came from and its page number. */
+  sourceAssetId?: string;
+  page?: number;
 }
 
 interface Item {
@@ -42,8 +45,34 @@ interface Content {
   layout: { presetId: string; zones: Zone[] } | null;
 }
 
-const assetSelect = { id: true, type: true, mimeType: true, storageKey: true, checksum: true, sizeBytes: true, width: true, height: true, durationSec: true } as const;
+const pageSelect = { id: true, page: true, storageKey: true, mimeType: true, sizeBytes: true, checksum: true, width: true, height: true } as const;
+const assetSelect = { id: true, type: true, mimeType: true, storageKey: true, checksum: true, sizeBytes: true, width: true, height: true, durationSec: true, derivatives: { where: { kind: "PDF_PAGE" as const }, orderBy: { page: "asc" as const }, select: pageSelect } } as const;
 const itemsInclude = { items: { orderBy: { position: "asc" as const }, include: { asset: { select: assetSelect } } } };
+
+type AssetRow = FileRef & { derivatives: { id: string; page: number | null; storageKey: string; mimeType: string | null; sizeBytes: number | null; checksum: string | null; width: number | null; height: number | null }[] };
+
+/**
+ * Turns playlist rows into playback items. A PDF becomes its rendered page images (one page, or
+ * all of them in order), so players never render PDFs themselves. Positions are renumbered.
+ */
+function playable(rows: { asset: AssetRow; page?: number | null; durationSec: number }[], files: Map<string, FileRef>): Item[] {
+  const out: Item[] = [];
+  for (const row of rows) {
+    const { derivatives, ...asset } = row.asset;
+    const pages = asset.type === "PDF" ? derivatives.filter((d) => row.page == null || d.page === row.page) : [];
+    if (!pages.length) {
+      files.set(asset.id, asset);
+      out.push({ assetId: asset.id, position: out.length, durationSec: row.durationSec });
+      continue;
+    }
+    for (const d of pages) {
+      files.set(d.id, { id: d.id, type: "IMAGE", mimeType: d.mimeType ?? "image/png", storageKey: d.storageKey, checksum: d.checksum, sizeBytes: d.sizeBytes ?? 0, width: d.width, height: d.height, durationSec: null, sourceAssetId: asset.id, page: d.page ?? undefined });
+      out.push({ assetId: d.id, position: out.length, durationSec: row.durationSec });
+    }
+  }
+  return out;
+}
+
 /** How long a media file bound straight to a layout zone shows before it repeats. */
 const ZONE_MEDIA_SEC = 10;
 const TEMPLATE_SEC = 15;
@@ -53,14 +82,14 @@ async function loadContent(tx: Tx, kind: AssignmentKind, refId: string, files: M
   const use = (f: FileRef) => (files.set(f.id, f), f.id);
   if (kind === "PLAYLIST") {
     const p = await tx.playlist.findUnique({ where: { id: refId }, include: itemsInclude });
-    return p && { name: p.name, items: p.items.map((it) => ({ assetId: use(it.asset), position: it.position, durationSec: it.durationSec })), layout: null };
+    return p && { name: p.name, items: playable(p.items, files), layout: null };
   }
   if (kind === "LAYOUT") {
     const l = await tx.layout.findUnique({ where: { id: refId }, include: { zones: { orderBy: { index: "asc" }, include: { asset: { select: assetSelect }, playlist: { include: itemsInclude } } } } });
     if (!l) return null;
     const zones = l.zones.map((z) => ({
       index: z.index, name: z.name, x: z.x, y: z.y, w: z.w, h: z.h, bindingKind: z.bindingKind, refId: z.assetId ?? z.playlistId,
-      items: z.asset ? [{ assetId: use(z.asset), position: 0, durationSec: ZONE_MEDIA_SEC }] : (z.playlist?.items ?? []).map((it) => ({ assetId: use(it.asset), position: it.position, durationSec: it.durationSec })),
+      items: playable(z.asset ? [{ asset: z.asset, durationSec: ZONE_MEDIA_SEC }] : (z.playlist?.items ?? []), files),
     }));
     return { name: l.name, items: [], layout: { presetId: l.presetId, zones } };
   }
@@ -114,7 +143,7 @@ export async function buildManifest(screenId: string) {
 
       const schedule = schedules.map((s) => ({
         id: s.id, playlistId: s.playlistId, name: s.playlist.name, targetKind: s.targetKind, startsAt: s.startsAt.toISOString(), endsAt: s.endsAt?.toISOString() ?? null, timezone: s.timezone,
-        items: s.playlist.items.map((it) => (files.set(it.asset.id, it.asset), { assetId: it.asset.id, position: it.position, durationSec: it.durationSec })),
+        items: playable(s.playlist.items, files),
       }));
       return { screen, assignment, content, canvas, schedule };
     },
@@ -123,7 +152,7 @@ export async function buildManifest(screenId: string) {
 
   const { screen } = data;
   const assets = await Promise.all(
-    [...files.values()].map(async (f) => ({ id: f.id, type: f.type, mimeType: f.mimeType, url: await presignGet(f.storageKey), checksum: f.checksum, sizeBytes: Number(f.sizeBytes), width: f.width, height: f.height, durationSec: f.durationSec })),
+    [...files.values()].map(async (f) => ({ id: f.id, type: f.type, mimeType: f.mimeType, url: await presignGet(f.storageKey), checksum: f.checksum, sizeBytes: Number(f.sizeBytes), width: f.width, height: f.height, durationSec: f.durationSec, sourceAssetId: f.sourceAssetId ?? null, page: f.page ?? null })),
   );
   return {
     version: screen.manifestVersion, screenId: screen.id, companyId: screen.companyId, orientation: screen.orientation, generatedAt: new Date().toISOString(),

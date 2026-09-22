@@ -5,14 +5,16 @@ import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/
 export const idParams = z.object({ id: z.string().min(1) });
 export const itemParams = z.object({ id: z.string().min(1), itemId: z.string().min(1) });
 export const listPlaylistsQuery = paginationQuery.extend({ search: z.string().trim().max(100).optional(), status: z.enum(["DRAFT", "PUBLISHED"]).optional() });
-export const createPlaylistBody = z.object({ name: z.string().trim().min(1).max(120), items: z.array(z.object({ assetId: z.string(), durationSec: z.number().int().min(1).max(3600) })).max(200).default([]) }).openapi("CreatePlaylistBody");
-export const updatePlaylistBody = z.object({ name: z.string().trim().min(1).max(120).optional(), items: z.array(z.object({ assetId: z.string(), durationSec: z.number().int().min(1).max(3600) })).max(200).optional() }).openapi("UpdatePlaylistBody");
-export const addItemBody = z.object({ assetId: z.string(), durationSec: z.number().int().min(1).max(3600).optional(), position: z.number().int().min(0).optional() }).openapi("AddPlaylistItemBody");
+/** `page` picks one page of a PDF; without it a PDF item shows every page, each for `durationSec`. */
+const itemInput = z.object({ assetId: z.string(), durationSec: z.number().int().min(1).max(3600), page: z.number().int().min(1).optional() });
+export const createPlaylistBody = z.object({ name: z.string().trim().min(1).max(120), items: z.array(itemInput).max(200).default([]) }).openapi("CreatePlaylistBody");
+export const updatePlaylistBody = z.object({ name: z.string().trim().min(1).max(120).optional(), items: z.array(itemInput).max(200).optional() }).openapi("UpdatePlaylistBody");
+export const addItemBody = z.object({ assetId: z.string(), durationSec: z.number().int().min(1).max(3600).optional(), page: z.number().int().min(1).optional(), position: z.number().int().min(0).optional() }).openapi("AddPlaylistItemBody");
 export const updateItemBody = z.object({ durationSec: z.number().int().min(1).max(3600) }).openapi("UpdatePlaylistItemBody");
 export const reorderBody = z.object({ itemIds: z.array(z.string()).min(1) }).openapi("ReorderPlaylistBody");
 export const publishBody = z.object({ screenIds: z.array(z.string()).default([]), groupIds: z.array(z.string()).default([]) }).refine((b) => b.screenIds.length + b.groupIds.length > 0, "Select at least one screen or group").openapi("PublishPlaylistBody");
 
-export const playlistItemDto = z.object({ id: z.string(), position: z.number(), durationSec: z.number(), asset: z.object({ id: z.string(), name: z.string(), type: z.string(), status: z.string(), thumbnailUrl: z.string().nullable() }) }).openapi("PlaylistItem");
+export const playlistItemDto = z.object({ id: z.string(), position: z.number(), durationSec: z.number(), page: z.number().nullable(), asset: z.object({ id: z.string(), name: z.string(), type: z.string(), status: z.string(), thumbnailUrl: z.string().nullable() }) }).openapi("PlaylistItem");
 export const playlistDto = z.object({ id: z.string(), name: z.string(), status: z.string(), version: z.number(), itemCount: z.number(), totalDurationSec: z.number(), assignedTo: z.array(z.object({ id: z.string(), name: z.string() })), createdAt: z.string(), updatedAt: z.string(), items: z.array(playlistItemDto).optional() }).openapi("Playlist");
 export const publishResultDto = z.object({ version: z.number(), screens: z.array(z.object({ id: z.string(), name: z.string(), status: z.string(), version: z.number() })) }).openapi("PublishResult");
 

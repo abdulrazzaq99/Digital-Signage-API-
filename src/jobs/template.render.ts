@@ -1,33 +1,40 @@
-import { createHash } from "node:crypto";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { env } from "../config/env.js";
 import { changeContent } from "../core/assignments/content.js";
 import { prisma } from "../core/db/prisma.js";
 import { logger } from "../core/middleware/logger.js";
 import { Events } from "../core/realtime/events.js";
 import { emitToCompany } from "../core/realtime/server.js";
-import { deleteObject, s3 } from "../core/storage/s3.js";
+import { deleteObject, getObjectBuffer, putObject } from "../core/storage/s3.js";
+import { renderTemplate } from "../modules/templates/templates.render.js";
+import { templateField } from "../modules/templates/templates.schemas.js";
 
 /**
- * Renders a template instance to a player-cacheable asset. This implementation writes an SVG
- * built from the template fields, which every Android WebView player can display. Swapping in
- * a headless-browser PNG renderer changes only this file.
+ * Renders a template instance to a PNG at the target resolution and swaps it in. The previous
+ * output stays live until then; the swap and the manifest bump of every screen showing it
+ * happen together. Jobs for values that were already rendered are skipped.
  */
 export async function templateRender(data: { instanceId: string; companyId: string }): Promise<void> {
   const instance = await prisma.templateInstance.findUnique({ where: { id: data.instanceId }, include: { template: true } });
-  if (!instance) return;
+  if (!instance || (!instance.renderPending && instance.outputKey)) return;
+  const fields = (instance.template.fields as unknown[]).map((f) => templateField.parse(f));
   const values = instance.values as Record<string, string>;
-  const landscape = instance.template.orientation === "LANDSCAPE";
-  const [w, h] = landscape ? [1920, 1080] : [1080, 1920];
-  const esc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]!);
-  const lines = Object.entries(values).filter(([, v]) => v).map(([k, v], i) => `<text x="${w * 0.08}" y="${h * 0.3 + i * (h * 0.11)}" font-family="Inter, Arial, sans-serif" font-size="${i === 0 ? h * 0.08 : h * 0.05}" font-weight="${i === 0 ? 800 : 500}" fill="#ffffff">${esc(v)}<title>${esc(k)}</title></text>`);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f172a"/><stop offset="1" stop-color="#1e3a8a"/></linearGradient></defs><rect width="${w}" height="${h}" fill="url(#g)"/>${lines.join("")}<text x="${w * 0.08}" y="${h * 0.92}" font-family="Inter, Arial, sans-serif" font-size="${h * 0.03}" fill="#94a3b8">${esc(instance.template.name)}</text></svg>`;
-  const key = `${data.companyId}/templates/${instance.id}/${Date.now()}.svg`;
   try {
-    await s3.send(new PutObjectCommand({ Bucket: env.S3_BUCKET, Key: key, Body: svg, ContentType: "image/svg+xml" }));
-    // Swap the output and bump the screens showing it in one step; the old file served until now.
-    await changeContent(data.companyId, { templateInstanceIds: [instance.id] }, (tx) => tx.templateInstance.update({ where: { id: instance.id }, data: { outputKey: key, outputMimeType: "image/svg+xml", outputChecksum: createHash("sha256").update(svg).digest("hex"), outputSizeBytes: Buffer.byteLength(svg), outputWidth: w, outputHeight: h } }));
-    if (instance.outputKey && instance.outputKey !== key) await deleteObject(instance.outputKey);
+    // Image fields hold media asset IDs; one deleted since it was chosen is simply left out.
+    const imageIds = fields.filter((f) => f.type === "image" && values[f.key]).map((f) => values[f.key]!);
+    const assets = await prisma.mediaAsset.findMany({ where: { id: { in: imageIds }, companyId: instance.companyId, type: "IMAGE", status: "READY" }, select: { id: true, storageKey: true } });
+    const images = new Map<string, Buffer>();
+    for (const f of fields.filter((x) => x.type === "image")) {
+      const a = assets.find((x) => x.id === values[f.key]);
+      if (a) images.set(f.key, await getObjectBuffer(a.storageKey));
+    }
+    const out = await renderTemplate({ orientation: instance.template.orientation, fields, values, images });
+    const key = `${data.companyId}/templates/${instance.id}/${Date.now()}.png`;
+    await putObject(key, out.body, out.mimeType);
+    await changeContent(data.companyId, { templateInstanceIds: [instance.id] }, async (tx) => {
+      // Values edited during the render keep it pending; their own job renders them next.
+      const current = await tx.templateInstance.findUnique({ where: { id: instance.id }, select: { valuesVersion: true } });
+      await tx.templateInstance.update({ where: { id: instance.id }, data: { outputKey: key, outputMimeType: out.mimeType, outputChecksum: out.checksum, outputSizeBytes: out.sizeBytes, outputWidth: out.width, outputHeight: out.height, renderPending: current?.valuesVersion !== instance.valuesVersion } });
+    });
+    if (instance.outputKey) await deleteObject(instance.outputKey);
     emitToCompany(data.companyId, Events.mediaReady, { templateInstanceId: instance.id, status: "READY" });
   } catch (err) {
     logger.error({ err, instanceId: instance.id }, "template render failed");

@@ -33,8 +33,18 @@ async function toTemplateDto(t: Template) {
   return { id: t.id, name: t.name, category: t.category, orientation: t.orientation, fields: fieldsOf(t), isGlobal: t.isGlobal, usedIn: await prisma.templateInstance.count({ where: { templateId: t.id } }), createdAt: t.createdAt.toISOString() };
 }
 
+/** `rendered`: the output matches the current values. `rendering`: a render is queued; `outputUrl` may still be the previous output. */
 async function toInstanceDto(i: TemplateInstance & { template: { name: string } }) {
-  return { id: i.id, templateId: i.templateId, templateName: i.template.name, name: i.name, values: i.values as Record<string, string>, outputUrl: i.outputKey ? await presignGet(i.outputKey) : null, rendered: !!i.outputKey, createdAt: i.createdAt.toISOString(), updatedAt: i.updatedAt.toISOString() };
+  return { id: i.id, templateId: i.templateId, templateName: i.template.name, name: i.name, values: i.values as Record<string, string>, outputUrl: i.outputKey ? await presignGet(i.outputKey) : null, rendered: !!i.outputKey && !i.renderPending, rendering: i.renderPending, createdAt: i.createdAt.toISOString(), updatedAt: i.updatedAt.toISOString() };
+}
+
+/** Image fields take the ID of a ready image in the company's media library. */
+async function assertImageValues(companyId: string, fields: TemplateField[], values: Record<string, string>) {
+  const picked = fields.filter((f) => f.type === "image" && values[f.key]?.trim()).map((f) => ({ key: f.key, id: values[f.key]!.trim() }));
+  if (!picked.length) return;
+  const found = new Set((await prisma.mediaAsset.findMany({ where: { companyId, id: { in: picked.map((p) => p.id) }, type: "IMAGE", status: "READY" }, select: { id: true } })).map((a) => a.id));
+  const bad = picked.filter((p) => !found.has(p.id));
+  if (bad.length) throw new ValidationError("Template values are invalid", bad.map((b) => ({ path: b.key, message: "Choose a ready image from the media library" })), "TEMPLATE_VALUES_INVALID");
 }
 
 async function findInstance(companyId: string, id: string) {
@@ -82,7 +92,9 @@ export const templatesService = {
     if (!t) throw new ValidationError("Template not found", undefined, "TEMPLATE_NOT_FOUND");
     const issues = validateValues(fieldsOf(t), body.values);
     if (issues.length) throw new ValidationError("Template values are invalid", issues, "TEMPLATE_VALUES_INVALID");
-    const i = await prisma.templateInstance.create({ data: { companyId, templateId: t.id, name: body.name, values: body.values }, include: { template: true } });
+    await assertImageValues(companyId, fieldsOf(t), body.values);
+    const i = await prisma.templateInstance.create({ data: { companyId, templateId: t.id, name: body.name, values: body.values, renderPending: true }, include: { template: true } });
+    await enqueue(JobNames.templateRender, { instanceId: i.id, companyId });
     await logActivity({ companyId, actor, action: "template_instance.created", resourceType: "template_instance", resourceId: i.id, summary: `"${i.name}" created from template ${t.name}` });
     return toInstanceDto(i);
   },
@@ -93,17 +105,21 @@ export const templatesService = {
     if (body.values) {
       const issues = validateValues(fieldsOf(existing.template), body.values);
       if (issues.length) throw new ValidationError("Template values are invalid", issues, "TEMPLATE_VALUES_INVALID");
+      await assertImageValues(companyId, fieldsOf(existing.template), body.values);
     }
-    // The current output stays live until the re-render finishes, which then bumps the screens
-    // showing it. A rename changes the manifest's assignment name, so it bumps them now.
-    const i = await changeContent(companyId, body.name !== undefined && body.name !== existing.name ? { templateInstanceIds: [id] } : {}, (tx) => tx.templateInstance.update({ where: { id }, data: { name: body.name, values: body.values }, include: { template: true } }));
-    if (body.values && existing.outputKey) await enqueue(JobNames.templateRender, { instanceId: id, companyId });
+    // New values are re-rendered automatically; the current output stays live until the render
+    // lands and bumps the screens showing it. A rename changes the manifest's assignment name,
+    // so it bumps them now.
+    const rename = body.name !== undefined && body.name !== existing.name;
+    const i = await changeContent(companyId, rename ? { templateInstanceIds: [id] } : {}, (tx) => tx.templateInstance.update({ where: { id }, data: { name: body.name, ...(body.values ? { values: body.values, valuesVersion: { increment: 1 }, renderPending: true } : {}) }, include: { template: true } }));
+    if (body.values) await enqueue(JobNames.templateRender, { instanceId: id, companyId });
     return toInstanceDto(i);
   },
 
   async render(scope: TenantScope, id: string) {
     const companyId = requireCompanyId(scope);
-    const i = await findInstance(companyId, id);
+    await findInstance(companyId, id);
+    const i = await prisma.templateInstance.update({ where: { id }, data: { renderPending: true }, include: { template: true } });
     await enqueue(JobNames.templateRender, { instanceId: i.id, companyId });
     return toInstanceDto(i);
   },

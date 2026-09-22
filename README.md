@@ -49,6 +49,8 @@ npm test
 
 Tests read `.env.test` when present, otherwise the committed `.env.test.example`, whose values match `docker-compose.test.yml` (bucket `media-test`, created automatically).
 
+Media processing runs the real tools, so the worker and the tests need `ffmpeg`, `ffprobe`, `pdfinfo` and `pdftoppm` on the PATH (`brew install ffmpeg poppler`, or `apt install ffmpeg poppler-utils`). The Docker image already includes them.
+
 ## Project structure
 
 ```

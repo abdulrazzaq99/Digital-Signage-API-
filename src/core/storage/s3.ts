@@ -1,5 +1,8 @@
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { createWriteStream } from "node:fs";
+import type { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { env } from "../../config/env.js";
 
 const credentials = { accessKeyId: env.S3_ACCESS_KEY, secretAccessKey: env.S3_SECRET_KEY };
@@ -36,4 +39,21 @@ export async function headObject(key: string): Promise<{ size: number; contentTy
 
 export async function deleteObject(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => undefined);
+}
+
+/** Streams an object to a local file (worker-side processing). */
+export async function downloadToFile(key: string, path: string): Promise<void> {
+  const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!res.Body) throw new Error(`Object ${key} has no body`);
+  await pipeline(res.Body as Readable, createWriteStream(path));
+}
+
+export async function getObjectBuffer(key: string): Promise<Buffer> {
+  const res = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!res.Body) throw new Error(`Object ${key} has no body`);
+  return Buffer.from(await res.Body.transformToByteArray());
+}
+
+export async function putObject(key: string, body: Buffer, contentType: string): Promise<void> {
+  await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }));
 }

@@ -23,7 +23,8 @@ RUN npm ci --omit=dev
 FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-RUN apk add --no-cache wget
+# ffmpeg/ffprobe (video checks and thumbnails), poppler (PDF pages) and fonts (template text).
+RUN apk add --no-cache wget ffmpeg poppler-utils fontconfig font-dejavu
 COPY --chown=node:node --from=deps /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/dist ./dist
 COPY --chown=node:node --from=build /app/prisma ./prisma

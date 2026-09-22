@@ -15,23 +15,28 @@ const DEFAULT_DURATION = { IMAGE: 10, VIDEO: 30, PDF: 15 } as const;
 
 async function toDto(p: PlaylistRow, assigned: { id: string; name: string }[] = [], withItems = true) {
   const items = withItems
-    ? await Promise.all(p.items.map(async (it) => ({ id: it.id, position: it.position, durationSec: it.durationSec, asset: { id: it.asset.id, name: it.asset.name, type: it.asset.type, status: it.asset.status, thumbnailUrl: it.asset.derivatives[0]?.storageKey ? await presignGet(it.asset.derivatives[0].storageKey) : it.asset.type === "IMAGE" ? await presignGet(it.asset.storageKey) : null } })))
+    ? await Promise.all(p.items.map(async (it) => ({ id: it.id, position: it.position, durationSec: it.durationSec, page: it.page, asset: { id: it.asset.id, name: it.asset.name, type: it.asset.type, status: it.asset.status, thumbnailUrl: it.asset.derivatives[0]?.storageKey ? await presignGet(it.asset.derivatives[0].storageKey) : it.asset.type === "IMAGE" ? await presignGet(it.asset.storageKey) : null } })))
     : undefined;
   return { id: p.id, name: p.name, status: p.status, version: p.version, itemCount: p.items.length, totalDurationSec: p.items.reduce((a, b) => a + b.durationSec, 0), assignedTo: assigned, createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString(), ...(items ? { items } : {}) };
 }
 
-type ItemInput = { id?: string; assetId: string; durationSec?: number };
+type ItemInput = { id?: string; assetId: string; durationSec?: number; page?: number | null };
 
 async function assertAssets(companyId: string, items: ItemInput[], tx?: Tx) {
   if (!items.length) return [];
-  const found = await repo.assetsInCompany(companyId, items.map((i) => i.assetId), tx);
-  const types = new Map(found.map((a) => [a.id, a.type]));
-  const missing = items.filter((i) => !types.has(i.assetId));
+  const found = new Map((await repo.assetsInCompany(companyId, items.map((i) => i.assetId), tx)).map((a) => [a.id, a]));
+  const missing = items.filter((i) => !found.has(i.assetId));
   if (missing.length) throw new ValidationError("One or more media items are missing, not ready, or belong to another company", { assetIds: missing.map((m) => m.assetId) }, "ASSET_NOT_FOUND");
-  return items.map((i) => ({ id: i.id, assetId: i.assetId, durationSec: i.durationSec ?? DEFAULT_DURATION[types.get(i.assetId)!] }));
+  const badPage = items.filter((i) => i.page != null && (found.get(i.assetId)!.type !== "PDF" || i.page > (found.get(i.assetId)!.pages ?? 0)));
+  if (badPage.length) throw new ValidationError("A page can only be picked from a PDF, and must exist in it", { assetIds: badPage.map((i) => i.assetId) }, "INVALID_PAGE");
+  // Videos default to their own length (spec 6.2); images and PDF pages to a fixed time.
+  return items.map((i) => {
+    const a = found.get(i.assetId)!;
+    return { id: i.id, assetId: i.assetId, page: i.page ?? null, durationSec: i.durationSec ?? (a.type === "VIDEO" && a.durationSec ? a.durationSec : DEFAULT_DURATION[a.type]) };
+  });
 }
 
-const existingItems = (p: PlaylistRow) => p.items.map((i) => ({ id: i.id, assetId: i.assetId, durationSec: i.durationSec }));
+const existingItems = (p: PlaylistRow) => p.items.map((i) => ({ id: i.id, assetId: i.assetId, durationSec: i.durationSec, page: i.page }));
 
 export const playlistsService = {
   async list(scope: TenantScope, q: z.infer<typeof listPlaylistsQuery>) {
@@ -87,7 +92,7 @@ export const playlistsService = {
     if (!existing) throw new NotFoundError("Playlist");
     const copy = await withTransaction(async (tx) => {
       const created = await repo.create({ companyId: existing.companyId, name: `${existing.name} (copy)` }, tx);
-      await repo.syncItems(created.id, existing.items.map((i) => ({ assetId: i.assetId, durationSec: i.durationSec })), tx);
+      await repo.syncItems(created.id, existing.items.map((i) => ({ assetId: i.assetId, durationSec: i.durationSec, page: i.page })), tx);
       return repo.findScoped(existing.companyId, created.id, tx);
     });
     await logActivity({ companyId: existing.companyId, actor, action: "playlist.duplicated", resourceType: "playlist", resourceId: copy!.id, summary: `Playlist "${existing.name}" duplicated` });
@@ -100,7 +105,7 @@ export const playlistsService = {
     const [item] = await assertAssets(existing.companyId, [body]);
     const items: ItemInput[] = existingItems(existing);
     items.splice(Math.min(body.position ?? items.length, items.length), 0, item!);
-    const p = await changeContent(existing.companyId, { playlistIds: [id] }, async (tx) => { await repo.syncItems(id, items as { id?: string; assetId: string; durationSec: number }[], tx); return repo.findScoped(existing.companyId, id, tx); });
+    const p = await changeContent(existing.companyId, { playlistIds: [id] }, async (tx) => { await repo.syncItems(id, items as { id?: string; assetId: string; durationSec: number; page: number | null }[], tx); return repo.findScoped(existing.companyId, id, tx); });
     return toDto(p!);
   },
 
@@ -129,7 +134,7 @@ export const playlistsService = {
     const current = new Map(existing.items.map((i) => [i.id, i]));
     const unique = new Set(body.itemIds);
     if (unique.size !== body.itemIds.length || unique.size !== current.size || body.itemIds.some((i) => !current.has(i))) throw new ValidationError("itemIds must contain every current item exactly once", undefined, "INVALID_ORDER");
-    const items = body.itemIds.map((i) => ({ id: i, assetId: current.get(i)!.assetId, durationSec: current.get(i)!.durationSec }));
+    const items = body.itemIds.map((i) => ({ id: i, assetId: current.get(i)!.assetId, durationSec: current.get(i)!.durationSec, page: current.get(i)!.page }));
     const p = await changeContent(existing.companyId, { playlistIds: [id] }, async (tx) => { await repo.syncItems(id, items, tx); return repo.findScoped(existing.companyId, id, tx); });
     return toDto(p!);
   },

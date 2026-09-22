@@ -76,6 +76,11 @@ Login 10/min per IP · pairing 20/min per IP · pairing session polling 120/min 
 2. `PUT` the bytes to `uploadUrl` with the same `Content-Type` (direct to storage, never through the API).
    If the connection drops or the URL expires, call `POST /media/{id}/upload-url` for a fresh URL to the same asset (allowed while it is `UPLOADING` or `FAILED`) and PUT again. URL lifetime grows with the declared size, from 15 minutes up to 6 hours. Uploads left `UPLOADING` for 24 hours are deleted.
 3. `POST /media/{id}/finalize { width?, height?, durationSec?, pages? }`. The API verifies the object, size, and type; images become `READY`, video and PDF become `PROCESSING` until the worker finishes and emits `media.ready`.
+4. The worker measures the real file (client-sent sizes, durations and page counts are only hints) and generates a 480 px WebP thumbnail for every type (`thumbnailUrl`). Videos must be MP4 with 8-bit H.264 up to 3840×2160; anything else becomes `FAILED` with a `failureReason` that says how to fix it. PDF pages are rendered to PNG (fitting 1920×1920). A playlist item can pick one page with `page`; without it a PDF item shows every page, each for `durationSec`. Video items default to the video's own length.
+
+## Templates
+
+Template instances render to a PNG at the template's resolution (1920×1080 landscape, 1080×1920 portrait). An `image` field's value is the ID of a `READY` image in the company's media library. Fields may carry designer layout hints: `box` (`x`, `y`, `w`, `h` as fractions), `fontSize` (fraction of the height), `weight`, `align`, `color`, and `fit` (`cover`/`contain`) for images; fields without a box use the default layout. Creating an instance or changing its values queues a render. While `rendering` is true, `outputUrl` is still the previous output, and screens keep showing it until the new render lands.
 
 ## Real-time events (Socket.IO)
 

@@ -18,8 +18,8 @@ export const manifestDto = z.object({
   canvas: z.object({ setId: z.string(), position: z.number(), total: z.number(), activateAt: z.string().nullable(), viewport: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }), content: z.object({ kind: z.string(), refId: z.string() }).nullable() }).nullable(),
   /** Live and upcoming schedules. A SCREEN schedule beats a GROUP schedule, which beats the assignment. */
   schedule: z.array(z.object({ id: z.string(), playlistId: z.string(), name: z.string(), targetKind: z.enum(["SCREEN", "GROUP"]), startsAt: z.string(), endsAt: z.string().nullable(), timezone: z.string(), items: z.array(manifestItem) })),
-  /** Every file referenced above, once each, with a signed URL (1 hour). */
-  assets: z.array(z.object({ id: z.string(), type: z.string(), mimeType: z.string(), url: z.string(), checksum: z.string().nullable(), sizeBytes: z.number(), width: z.number().nullable(), height: z.number().nullable(), durationSec: z.number().nullable() })),
+  /** Every file referenced above, once each, with a signed URL (1 hour). PDFs arrive as their rendered pages (`sourceAssetId`, `page`). */
+  assets: z.array(z.object({ id: z.string(), type: z.string(), mimeType: z.string(), url: z.string(), checksum: z.string().nullable(), sizeBytes: z.number(), width: z.number().nullable(), height: z.number().nullable(), durationSec: z.number().nullable(), sourceAssetId: z.string().nullable(), page: z.number().nullable() })),
 }).openapi("Manifest");
 
 const tag = ["Player"];
