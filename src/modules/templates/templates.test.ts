@@ -62,6 +62,15 @@ describe("template rendering (B7)", () => {
     expect(await pixel(png, 900, 100)).not.toEqual([0, 0, 255]);
   });
 
+  it("renders without an image whose file is missing instead of failing", async () => {
+    const ctx = await customerContext();
+    const t = await prisma.template.create({ data: { name: "Product", category: "Retail", isGlobal: true, fields } });
+    const ghost = await prisma.mediaAsset.create({ data: { companyId: ctx.company.id, name: "ghost.png", type: "IMAGE", status: "READY", mimeType: "image/png", sizeBytes: BigInt(1), storageKey: `${ctx.company.id}/missing/ghost.png` } });
+    const inst = (await api().post("/api/v1/template-instances").set(ctx.auth).send({ templateId: t.id, name: "Promo", values: { headline: "Hello", photo: ghost.id } })).body.data;
+    await templateRender({ instanceId: inst.id, companyId: ctx.company.id });
+    expect((await api().get(`/api/v1/template-instances/${inst.id}`).set(ctx.auth)).body.data).toMatchObject({ rendered: true });
+  });
+
   it("only accepts ready images from the company's own library for image fields", async () => {
     const ctx = await customerContext();
     const other = await customerContext();

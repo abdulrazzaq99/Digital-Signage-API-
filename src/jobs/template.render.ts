@@ -18,13 +18,19 @@ export async function templateRender(data: { instanceId: string; companyId: stri
   const fields = (instance.template.fields as unknown[]).map((f) => templateField.parse(f));
   const values = instance.values as Record<string, string>;
   try {
-    // Image fields hold media asset IDs; one deleted since it was chosen is simply left out.
+    // Image fields hold media asset IDs; one deleted since it was chosen, or whose file can't be
+    // read, is left out rather than failing the whole render.
     const imageIds = fields.filter((f) => f.type === "image" && values[f.key]).map((f) => values[f.key]!);
     const assets = await prisma.mediaAsset.findMany({ where: { id: { in: imageIds }, companyId: instance.companyId, type: "IMAGE", status: "READY" }, select: { id: true, storageKey: true } });
     const images = new Map<string, Buffer>();
     for (const f of fields.filter((x) => x.type === "image")) {
       const a = assets.find((x) => x.id === values[f.key]);
-      if (a) images.set(f.key, await getObjectBuffer(a.storageKey));
+      if (!a) continue;
+      try {
+        images.set(f.key, await getObjectBuffer(a.storageKey));
+      } catch (err) {
+        logger.warn({ err, instanceId: instance.id, assetId: a.id }, "template image unavailable; rendering without it");
+      }
     }
     const out = await renderTemplate({ orientation: instance.template.orientation, fields, values, images });
     const key = `${data.companyId}/templates/${instance.id}/${Date.now()}.png`;
