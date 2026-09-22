@@ -36,8 +36,10 @@ export function authenticateDevice(): RequestHandler {
   return async (req, _res, next) => {
     try {
       const credential = bearer(req.header("authorization"));
-      const screen = await prisma.screen.findUnique({ where: { deviceCredentialHash: sha256(credential) }, select: { id: true, companyId: true, pairingStatus: true } });
+      const screen = await prisma.screen.findUnique({ where: { deviceCredentialHash: sha256(credential) }, select: { id: true, companyId: true, pairingStatus: true, lastSeenAt: true } });
       if (!screen || screen.pairingStatus !== "PAIRED") throw new UnauthorizedError("Device is not paired", "DEVICE_UNAUTHORIZED");
+      // First use of the credential closes the pairing session's re-claim window.
+      if (!screen.lastSeenAt) await prisma.screen.update({ where: { id: screen.id }, data: { lastSeenAt: new Date() } });
       req.screen = { id: screen.id, companyId: screen.companyId };
       next();
     } catch (err) {

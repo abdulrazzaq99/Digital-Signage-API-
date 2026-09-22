@@ -1,6 +1,8 @@
 export const API_PREFIX = "/api/v1";
 export const APP_VERSION = process.env.npm_package_version ?? "0.1.0";
 export const PAIRING_CODE_TTL_SEC = 5 * 60;
+/** After pairing, a player that lost the poll response can re-claim (rotate) its credential this long, until it first uses it. */
+export const CREDENTIAL_RECLAIM_SEC = 10 * 60;
 /** A just-rotated refresh token is still accepted this long, returning the same new pair (parallel requests, tabs, retries). */
 export const REFRESH_REUSE_GRACE_SEC = 20;
 export const PRESENCE_TTL_SEC = 90;

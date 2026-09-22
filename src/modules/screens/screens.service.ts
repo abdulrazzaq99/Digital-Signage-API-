@@ -1,6 +1,6 @@
 import { customAlphabet } from "nanoid";
 import type { z } from "zod";
-import { PAIRING_CODE_TTL_SEC } from "../../config/constants.js";
+import { CREDENTIAL_RECLAIM_SEC, PAIRING_CODE_TTL_SEC } from "../../config/constants.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, tenantWhere, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { randomToken, sha256 } from "../../core/auth/tokens.js";
@@ -118,7 +118,7 @@ export const screensService = {
     const session = await repo.findPairingBySession(sessionId);
     if (!session) throw new NotFoundError("Pairing session");
     if (session.status === "CONSUMED" && session.screenId) {
-      const credential = await claimCredential(session.screenId);
+      const credential = await claimCredential(session.id, session.screenId, session.consumedAt);
       return { status: "PAIRED" as const, screenId: session.screenId, credential };
     }
     if (session.expiresAt < new Date()) return { status: "EXPIRED" as const };
@@ -246,14 +246,25 @@ async function assertScreensBelong(companyId: string, ids: string[]): Promise<vo
   if (count !== new Set(ids).size) throw new ValidationError("One or more screens do not belong to this company", undefined, "SCREEN_NOT_FOUND");
 }
 
-/** Generates and stores a device credential the first time the player polls a consumed session. */
-async function claimCredential(screenId: string): Promise<string | null> {
+/**
+ * Issues the device credential for a consumed session. The first poll always gets one; if that
+ * response was lost, polls within CREDENTIAL_RECLAIM_SEC rotate it and return a new one, but only
+ * until the device first authenticates, and only for the screen's latest pairing.
+ */
+async function claimCredential(sessionId: string, screenId: string, consumedAt: Date | null): Promise<string | null> {
   const credential = randomToken(48);
   const updated = await withTransaction(async (tx) => {
-    const s = await tx.screen.findUnique({ where: { id: screenId }, select: { deviceCredentialHash: true } });
-    if (!s || s.deviceCredentialHash) return false;
-    await tx.screen.update({ where: { id: screenId }, data: { deviceCredentialHash: sha256(credential) } });
-    return true;
+    const s = await tx.screen.findUnique({ where: { id: screenId }, select: { deviceCredentialHash: true, lastSeenAt: true, pairingStatus: true } });
+    if (!s || s.pairingStatus !== "PAIRED") return false;
+    const latest = await tx.pairingSession.findFirst({ where: { screenId, status: "CONSUMED" }, orderBy: { consumedAt: "desc" }, select: { id: true } });
+    if (latest?.id !== sessionId) return false;
+    if (s.deviceCredentialHash) {
+      const inWindow = !!consumedAt && Date.now() - consumedAt.getTime() < CREDENTIAL_RECLAIM_SEC * 1000;
+      if (!inWindow || s.lastSeenAt) return false;
+    }
+    // Compare-and-swap so two overlapping polls can't leave the device holding a stale credential.
+    const { count } = await tx.screen.updateMany({ where: { id: screenId, deviceCredentialHash: s.deviceCredentialHash }, data: { deviceCredentialHash: sha256(credential) } });
+    return count === 1;
   });
   return updated ? credential : null;
 }

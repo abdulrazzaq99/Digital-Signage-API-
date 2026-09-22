@@ -53,7 +53,7 @@ Login 10/min per IP · pairing 20/min per IP · pairing session polling 120/min 
 1. Player: `POST /player/pairing-sessions { deviceId, model, playerVersion }` → `{ sessionId, code }` (code valid 5 minutes).
 2. Player shows the code and polls `GET /player/pairing-sessions/{sessionId}` every few seconds.
 3. User: `POST /screens/pair { code, name, location, orientation, groupId?, tags? }`. The API locks the licence, rejects at the limit, creates the screen.
-4. Player's next poll returns `{ status: "PAIRED", screenId, credential }`. The credential is returned exactly once; store it in secure storage.
+4. Player's next poll returns `{ status: "PAIRED", screenId, credential }`. Store it in secure storage and stop polling. If that response was lost, poll again: for 10 minutes after pairing, and until the device first authenticates with a credential, each poll rotates the credential and returns the new one (earlier ones stop working). After that, polls return `credential: null`.
 5. Player connects to Socket.IO `/player` with `auth: { token: credential }` and calls `GET /player/manifest`.
 
 ## Media upload sequence

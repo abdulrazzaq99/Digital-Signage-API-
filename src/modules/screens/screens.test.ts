@@ -23,6 +23,21 @@ async function pairScreen(auth: Record<string, string>, name = "Lobby Display 01
 }
 
 describe("pairing", () => {
+
+  it("stops re-issuing the credential 10 minutes after pairing, and never for an unpaired screen", async () => {
+    const ctx = await customerContext();
+    const late = await startPairing();
+    const paired = await api().post("/api/v1/screens/pair").set(ctx.auth).send({ code: late.code, name: "Late" });
+    expect((await api().get(`/api/v1/player/pairing-sessions/${late.sessionId}`)).body.data.credential).toBeTypeOf("string");
+    await prisma.pairingSession.update({ where: { id: late.sessionId }, data: { consumedAt: new Date(Date.now() - 11 * 60_000) } });
+    expect((await api().get(`/api/v1/player/pairing-sessions/${late.sessionId}`)).body.data.credential).toBeNull();
+
+    const gone = await startPairing();
+    const res = await api().post("/api/v1/screens/pair").set(ctx.auth).send({ code: gone.code, name: "Gone" });
+    expect((await api().post(`/api/v1/screens/${res.body.data.id}/unpair`).set(ctx.auth)).status).toBeLessThan(300);
+    expect((await api().get(`/api/v1/player/pairing-sessions/${gone.sessionId}`)).body.data.credential).toBeNull();
+    expect(paired.status).toBe(201);
+  });
   it("pairs a device, consumes a licence slot, and issues a credential once", async () => {
     const ctx = await customerContext({ screenLimit: 2 });
     const session = await startPairing("DEV-A");
@@ -36,8 +51,16 @@ describe("pairing", () => {
     const first = await api().get(`/api/v1/player/pairing-sessions/${session.sessionId}`);
     expect(first.body.data).toMatchObject({ status: "PAIRED", screenId: res.body.data.id });
     expect(first.body.data.credential).toBeTypeOf("string");
+    // The device has not used it yet, so a re-poll (lost response) rotates it and hands out a fresh one.
     const second = await api().get(`/api/v1/player/pairing-sessions/${session.sessionId}`);
-    expect(second.body.data.credential).toBeNull();
+    expect(second.body.data.credential).toBeTypeOf("string");
+    expect(second.body.data.credential).not.toBe(first.body.data.credential);
+    expect((await api().get("/api/v1/player/manifest").set("Authorization", `Bearer ${first.body.data.credential}`)).status).toBe(401);
+    expect((await api().get("/api/v1/player/manifest").set("Authorization", `Bearer ${second.body.data.credential}`)).status).toBe(200);
+    // Once the device has authenticated with it, the session no longer hands out credentials.
+    const third = await api().get(`/api/v1/player/pairing-sessions/${session.sessionId}`);
+    expect(third.body.data).toMatchObject({ status: "PAIRED", credential: null });
+    expect((await api().get("/api/v1/player/manifest").set("Authorization", `Bearer ${second.body.data.credential}`)).status).toBe(200);
 
     const license = await api().get(`/api/v1/companies/${ctx.company.id}/license`).set(ctx.auth);
     expect(license.body.data).toMatchObject({ paired: 1, available: 1 });
