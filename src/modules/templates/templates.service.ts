@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { changeContent } from "../../core/assignments/content.js";
 import { publishAssignment } from "../../core/assignments/publish.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
@@ -93,7 +94,10 @@ export const templatesService = {
       const issues = validateValues(fieldsOf(existing.template), body.values);
       if (issues.length) throw new ValidationError("Template values are invalid", issues, "TEMPLATE_VALUES_INVALID");
     }
-    const i = await prisma.templateInstance.update({ where: { id }, data: { name: body.name, values: body.values, ...(body.values ? { outputKey: null } : {}) }, include: { template: true } });
+    // The current output stays live until the re-render finishes, which then bumps the screens
+    // showing it. A rename changes the manifest's assignment name, so it bumps them now.
+    const i = await changeContent(companyId, body.name !== undefined && body.name !== existing.name ? { templateInstanceIds: [id] } : {}, (tx) => tx.templateInstance.update({ where: { id }, data: { name: body.name, values: body.values }, include: { template: true } }));
+    if (body.values && existing.outputKey) await enqueue(JobNames.templateRender, { instanceId: id, companyId });
     return toInstanceDto(i);
   },
 

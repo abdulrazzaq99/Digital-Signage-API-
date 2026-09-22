@@ -86,4 +86,19 @@ Events are triggers. After reconnecting, players call `GET /player/manifest` and
 
 ## Manifest
 
-`GET /player/manifest` returns the desired state: `version`, `assignment` (playlist, layout, template instance, or canvas), `assets[]` with signed URLs (1 hour), sizes and checksums, `layout` zones when applicable, `schedule[]`, and `canvas` position data with `activateAt`. Players download missing assets, then `POST /player/sync-ack { version, status: "activated" }`.
+`GET /player/manifest` returns the desired state, read from one database snapshot:
+
+| Field | Contents |
+|---|---|
+| `version` | Changes whenever anything below changes. Two fetches with the same version always return the same content. |
+| `assignment` | `{ kind, refId, name }` for the published playlist, layout, template instance or canvas, or `null`. |
+| `items[]` | Playback order `{ assetId, position, durationSec }` for a playlist or template assignment (and a canvas whose content is one). |
+| `layout` | For layouts: `presetId` and `zones[]` with geometry (fractions of the screen) and each zone's `items[]`. |
+| `canvas` | For a canvas assignment: `{ setId, position, total, activateAt, viewport, content }`. `viewport` is this screen's slice of the composition as fractions (`x`, `y`, `width`, `height`); members sit left to right in `position` order. |
+| `schedule[]` | Live and upcoming schedules (ended less than a day ago or later): `{ id, playlistId, name, targetKind, startsAt, endsAt, timezone, items[] }`. A `SCREEN` schedule beats a `GROUP` schedule, which beats the assignment. |
+| `assets[]` | Every file referenced above (assignment and schedules) exactly once: `{ id, type, mimeType, url, checksum, sizeBytes, width, height, durationSec }`. URLs are signed for 1 hour. |
+| `activateAt` | Optional shared start time (canvas activation). |
+
+Players download missing assets, `POST /player/sync-ack { version, status: "downloaded" }` once everything is cached, and `{ status: "activated" }` once it is playing. A canvas member counts as ready (preloaded) after acknowledging the current version.
+
+Edits go live on save: changing a playlist (items, order, durations, name), a layout zone, a schedule, a template instance's output, a canvas, a group's members, or deleting media in use bumps `version` on every screen that shows it and sends `screen.assignment.updated`. A template instance keeps its previous output on screen until the new render finishes.

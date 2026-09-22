@@ -4,7 +4,8 @@ import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/
 export const idParams = z.object({ id: z.string().min(1) });
 export const createCanvasBody = z.object({ name: z.string().trim().min(2).max(120), screenIds: z.array(z.string()).min(2).max(16) }).openapi("CreateCanvasBody");
 export const updateCanvasBody = z.object({ name: z.string().trim().min(2).max(120).optional(), screenIds: z.array(z.string()).min(2).max(16).optional(), content: z.object({ kind: z.enum(["PLAYLIST", "LAYOUT", "TEMPLATE_INSTANCE"]), refId: z.string().min(1) }).nullable().optional() }).openapi("UpdateCanvasBody");
-export const memberDto = z.object({ screenId: z.string(), name: z.string(), location: z.string().nullable(), position: z.number(), status: z.string(), ready: z.boolean(), synced: z.boolean(), orientation: z.string() });
+/** `ready`: online before activation; online and preloaded (acknowledged the current version) once active. */
+export const memberDto = z.object({ screenId: z.string(), name: z.string(), location: z.string().nullable(), position: z.number(), status: z.string(), online: z.boolean(), preloaded: z.boolean(), ready: z.boolean(), synced: z.boolean(), orientation: z.string() });
 export const canvasDto = z.object({ id: z.string(), name: z.string(), status: z.enum(["DRAFT", "ACTIVE", "DEGRADED", "INACTIVE"]), members: z.array(memberDto), readyCount: z.number(), content: z.object({ kind: z.string(), refId: z.string() }).nullable(), activateAt: z.string().nullable(), createdAt: z.string() }).openapi("CanvasSet");
 
 const tag = ["Canvas"];

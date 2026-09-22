@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { changeContent } from "../../core/assignments/content.js";
 import { emitAssignmentUpdated, publishAssignment } from "../../core/assignments/publish.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, tenantWhere, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
@@ -62,7 +63,7 @@ export const playlistsService = {
   async update(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updatePlaylistBody>) {
     const existing = await repo.findScoped(scope.companyId, id);
     if (!existing) throw new NotFoundError("Playlist");
-    const p = await withTransaction(async (tx) => {
+    const p = await changeContent(existing.companyId, { playlistIds: [id] }, async (tx) => {
       if (body.items) await repo.syncItems(id, await assertAssets(existing.companyId, body.items, tx), tx);
       await repo.update(id, { name: body.name }, tx);
       return repo.findScoped(existing.companyId, id, tx);
@@ -76,7 +77,8 @@ export const playlistsService = {
     if (!existing) throw new NotFoundError("Playlist");
     const assigned = (await repo.assignedScreens([id])).get(id) ?? [];
     if (assigned.length) throw new ConflictError(`Playlist is assigned to ${assigned.length} screen${assigned.length > 1 ? "s" : ""}; publish other content first`, "PLAYLIST_IN_USE", { screens: assigned });
-    await repo.delete(id);
+    // Its schedules go with it and layout zones lose it, so those screens get a new manifest.
+    await changeContent(existing.companyId, { playlistIds: [id] }, (tx) => repo.delete(id, tx));
     await logActivity({ companyId: existing.companyId, actor, action: "playlist.deleted", resourceType: "playlist", resourceId: id, summary: `Playlist "${existing.name}" deleted` });
   },
 
@@ -98,7 +100,7 @@ export const playlistsService = {
     const [item] = await assertAssets(existing.companyId, [body]);
     const items: ItemInput[] = existingItems(existing);
     items.splice(Math.min(body.position ?? items.length, items.length), 0, item!);
-    const p = await withTransaction(async (tx) => { await repo.syncItems(id, items as { id?: string; assetId: string; durationSec: number }[], tx); return repo.findScoped(existing.companyId, id, tx); });
+    const p = await changeContent(existing.companyId, { playlistIds: [id] }, async (tx) => { await repo.syncItems(id, items as { id?: string; assetId: string; durationSec: number }[], tx); return repo.findScoped(existing.companyId, id, tx); });
     return toDto(p!);
   },
 
@@ -107,7 +109,7 @@ export const playlistsService = {
     if (!existing) throw new NotFoundError("Playlist");
     if (!existing.items.some((i) => i.id === itemId)) throw new NotFoundError("Playlist item");
     const items = existingItems(existing).map((i) => ({ ...i, durationSec: i.id === itemId ? body.durationSec : i.durationSec }));
-    const p = await withTransaction(async (tx) => { await repo.syncItems(id, items, tx); return repo.findScoped(existing.companyId, id, tx); });
+    const p = await changeContent(existing.companyId, { playlistIds: [id] }, async (tx) => { await repo.syncItems(id, items, tx); return repo.findScoped(existing.companyId, id, tx); });
     return toDto(p!);
   },
 
@@ -116,7 +118,7 @@ export const playlistsService = {
     if (!existing) throw new NotFoundError("Playlist");
     if (!existing.items.some((i) => i.id === itemId)) throw new NotFoundError("Playlist item");
     const items = existingItems(existing).filter((i) => i.id !== itemId);
-    const p = await withTransaction(async (tx) => { await repo.syncItems(id, items, tx); return repo.findScoped(existing.companyId, id, tx); });
+    const p = await changeContent(existing.companyId, { playlistIds: [id] }, async (tx) => { await repo.syncItems(id, items, tx); return repo.findScoped(existing.companyId, id, tx); });
     return toDto(p!);
   },
 
@@ -128,7 +130,7 @@ export const playlistsService = {
     const unique = new Set(body.itemIds);
     if (unique.size !== body.itemIds.length || unique.size !== current.size || body.itemIds.some((i) => !current.has(i))) throw new ValidationError("itemIds must contain every current item exactly once", undefined, "INVALID_ORDER");
     const items = body.itemIds.map((i) => ({ id: i, assetId: current.get(i)!.assetId, durationSec: current.get(i)!.durationSec }));
-    const p = await withTransaction(async (tx) => { await repo.syncItems(id, items, tx); return repo.findScoped(existing.companyId, id, tx); });
+    const p = await changeContent(existing.companyId, { playlistIds: [id] }, async (tx) => { await repo.syncItems(id, items, tx); return repo.findScoped(existing.companyId, id, tx); });
     return toDto(p!);
   },
 

@@ -1,10 +1,12 @@
+import { createHash } from "node:crypto";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { env } from "../config/env.js";
+import { changeContent } from "../core/assignments/content.js";
 import { prisma } from "../core/db/prisma.js";
 import { logger } from "../core/middleware/logger.js";
 import { Events } from "../core/realtime/events.js";
 import { emitToCompany } from "../core/realtime/server.js";
-import { s3 } from "../core/storage/s3.js";
+import { deleteObject, s3 } from "../core/storage/s3.js";
 
 /**
  * Renders a template instance to a player-cacheable asset. This implementation writes an SVG
@@ -23,7 +25,9 @@ export async function templateRender(data: { instanceId: string; companyId: stri
   const key = `${data.companyId}/templates/${instance.id}/${Date.now()}.svg`;
   try {
     await s3.send(new PutObjectCommand({ Bucket: env.S3_BUCKET, Key: key, Body: svg, ContentType: "image/svg+xml" }));
-    await prisma.templateInstance.update({ where: { id: instance.id }, data: { outputKey: key } });
+    // Swap the output and bump the screens showing it in one step; the old file served until now.
+    await changeContent(data.companyId, { templateInstanceIds: [instance.id] }, (tx) => tx.templateInstance.update({ where: { id: instance.id }, data: { outputKey: key, outputMimeType: "image/svg+xml", outputChecksum: createHash("sha256").update(svg).digest("hex"), outputSizeBytes: Buffer.byteLength(svg), outputWidth: w, outputHeight: h } }));
+    if (instance.outputKey && instance.outputKey !== key) await deleteObject(instance.outputKey);
     emitToCompany(data.companyId, Events.mediaReady, { templateInstanceId: instance.id, status: "READY" });
   } catch (err) {
     logger.error({ err, instanceId: instance.id }, "template render failed");

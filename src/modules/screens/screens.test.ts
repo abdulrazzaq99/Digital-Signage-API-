@@ -220,7 +220,7 @@ describe("player", () => {
     await prisma.screen.update({ where: { id: screen.id }, data: { manifestVersion: 1 } });
     const res = await api().get("/api/v1/player/manifest").set("Authorization", `Bearer ${credential}`);
     expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ version: 1, assignment: { kind: "PLAYLIST", name: "Summer" }, assets: [{ id: asset.id, durationSec: 15, sizeBytes: 1234 }] });
+    expect(res.body.data).toMatchObject({ version: 1, assignment: { kind: "PLAYLIST", name: "Summer" }, items: [{ assetId: asset.id, position: 0, durationSec: 15 }], assets: [{ id: asset.id, type: "IMAGE", mimeType: "image/jpeg", sizeBytes: 1234 }] });
     expect(res.body.data.assets[0].url).toContain("X-Amz-Signature");
   });
 

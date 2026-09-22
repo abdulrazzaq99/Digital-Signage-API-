@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { changeContent } from "../../core/assignments/content.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, tenantWhere, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
@@ -46,7 +47,9 @@ export const schedulesService = {
     if (!(await prisma.playlist.count({ where: { id: body.playlistId, companyId } }))) throw new ValidationError("Playlist not found", undefined, "PLAYLIST_NOT_FOUND");
     const { conflicts } = await this.checkConflicts(scope, body);
     if (conflicts.length) throw new ConflictError("This schedule overlaps an existing schedule on the same target", "SCHEDULE_CONFLICT", { conflicts });
-    const s = await repo.create({ companyId, playlistId: body.playlistId, targetKind: body.targetKind, targetId: body.targetId, startsAt: new Date(body.startsAt), endsAt: body.endsAt ? new Date(body.endsAt) : null, timezone: body.timezone });
+    // The new schedule's ID isn't known up front, so its target's screens are named directly.
+    const target = body.targetKind === "SCREEN" ? { screenIds: [body.targetId] } : { groupIds: [body.targetId] };
+    const s = await changeContent(companyId, target, (tx) => repo.create({ companyId, playlistId: body.playlistId, targetKind: body.targetKind, targetId: body.targetId, startsAt: new Date(body.startsAt), endsAt: body.endsAt ? new Date(body.endsAt) : null, timezone: body.timezone }, tx));
     await logActivity({ companyId, actor, action: "schedule.created", resourceType: "schedule", resourceId: s.id, summary: `"${s.playlist.name}" scheduled for ${await repo.targetName(s.targetKind, s.targetId)}` });
     await notifyTarget(s.targetKind, s.targetId);
     return toDto(s);
@@ -62,7 +65,7 @@ export const schedulesService = {
     if (endsAt && endsAt <= startsAt) throw new ValidationError("endsAt must be after startsAt", undefined, "INVALID_WINDOW");
     const conflicts = await repo.overlapping(existing.companyId, existing.targetKind, existing.targetId, startsAt, endsAt, id);
     if (conflicts.length) throw new ConflictError("This schedule overlaps an existing schedule on the same target", "SCHEDULE_CONFLICT", { conflicts: conflicts.map((r) => ({ scheduleId: r.id, playlistName: r.playlist.name })) });
-    const s = await repo.update(id, { playlistId: body.playlistId, startsAt, endsAt, timezone: body.timezone });
+    const s = await changeContent(existing.companyId, { scheduleIds: [id] }, (tx) => repo.update(id, { playlistId: body.playlistId, startsAt, endsAt, timezone: body.timezone }, tx));
     await logActivity({ companyId: existing.companyId, actor, action: "schedule.updated", resourceType: "schedule", resourceId: id, summary: `Schedule for ${await repo.targetName(s.targetKind, s.targetId)} updated` });
     await notifyTarget(s.targetKind, s.targetId);
     return toDto(s);
@@ -71,7 +74,7 @@ export const schedulesService = {
   async remove(actor: AuthUser, scope: TenantScope, id: string) {
     const existing = await repo.findScoped(scope.companyId, id);
     if (!existing) throw new NotFoundError("Schedule");
-    await repo.delete(id);
+    await changeContent(existing.companyId, { scheduleIds: [id] }, (tx) => repo.delete(id, tx));
     await logActivity({ companyId: existing.companyId, actor, action: "schedule.deleted", resourceType: "schedule", resourceId: id, summary: `Schedule for ${await repo.targetName(existing.targetKind, existing.targetId)} removed` });
     await notifyTarget(existing.targetKind, existing.targetId);
   },

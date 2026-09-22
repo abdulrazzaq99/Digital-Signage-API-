@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { changeContent } from "../../core/assignments/content.js";
 import { publishAssignment } from "../../core/assignments/publish.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
@@ -50,11 +51,11 @@ export const layoutsService = {
     if (body.bindingKind === "MEDIA") {
       const ok = await prisma.mediaAsset.count({ where: { id: body.refId, companyId, status: "READY" } });
       if (!ok) throw new ValidationError("Media not found or not ready", undefined, "ASSET_NOT_FOUND");
-      await prisma.layoutZone.update({ where: { id: zone.id }, data: { bindingKind: "MEDIA", assetId: body.refId, playlistId: null } });
+      await changeContent(companyId, { layoutIds: [id] }, (tx) => tx.layoutZone.update({ where: { id: zone.id }, data: { bindingKind: "MEDIA", assetId: body.refId, playlistId: null } }));
     } else {
       const ok = await prisma.playlist.count({ where: { id: body.refId, companyId } });
       if (!ok) throw new ValidationError("Playlist not found", undefined, "PLAYLIST_NOT_FOUND");
-      await prisma.layoutZone.update({ where: { id: zone.id }, data: { bindingKind: "PLAYLIST", playlistId: body.refId, assetId: null } });
+      await changeContent(companyId, { layoutIds: [id] }, (tx) => tx.layoutZone.update({ where: { id: zone.id }, data: { bindingKind: "PLAYLIST", playlistId: body.refId, assetId: null } }));
     }
     return toDto(await findScoped(companyId, id));
   },
@@ -64,7 +65,7 @@ export const layoutsService = {
     const l = await findScoped(companyId, id);
     const zone = l.zones.find((z) => z.index === index);
     if (!zone) throw new NotFoundError("Zone");
-    await prisma.layoutZone.update({ where: { id: zone.id }, data: { bindingKind: null, assetId: null, playlistId: null } });
+    await changeContent(companyId, { layoutIds: [id] }, (tx) => tx.layoutZone.update({ where: { id: zone.id }, data: { bindingKind: null, assetId: null, playlistId: null } }));
     return toDto(await findScoped(companyId, id));
   },
 

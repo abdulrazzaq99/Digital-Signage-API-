@@ -147,7 +147,7 @@ describe("resumable uploads", () => {
   it("cleans up uploads abandoned for more than 24 hours", async () => {
     const ctx = await customerContext();
     const stale = await upload(ctx.auth, { fileName: "stale.png" });
-    const fresh = await upload(ctx.auth, { fileName: "fresh.png" });
+    await upload(ctx.auth, { fileName: "fresh.png" });
     const finished = await upload(ctx.auth, { fileName: "done.png" });
     await api().post(`/api/v1/media/${finished.asset.id}/finalize`).set(ctx.auth).send({});
     const old = new Date(Date.now() - 25 * 3600_000);

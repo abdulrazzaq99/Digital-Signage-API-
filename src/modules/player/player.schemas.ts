@@ -7,13 +7,19 @@ export const heartbeatBody = z.object({ playerVersion: z.string().max(40).option
 export const syncAckBody = z.object({ version: z.number().int().nonnegative(), status: z.enum(["downloaded", "activated", "failed"]).default("activated"), error: z.string().max(500).optional() }).openapi("SyncAckBody");
 export const diagnosticsBody = z.object({ level: z.enum(["info", "warn", "error"]).default("info"), event: z.string().max(80), detail: z.record(z.string(), z.unknown()).optional() }).openapi("DiagnosticsBody");
 
+const manifestItem = z.object({ assetId: z.string(), position: z.number(), durationSec: z.number() }).openapi("ManifestItem");
 export const manifestDto = z.object({
   version: z.number(), screenId: z.string(), companyId: z.string(), orientation: z.string(), generatedAt: z.string(), activateAt: z.string().nullable(),
   assignment: z.object({ kind: z.string(), refId: z.string(), name: z.string() }).nullable(),
-  assets: z.array(z.object({ id: z.string(), type: z.string(), url: z.string(), checksum: z.string().nullable(), sizeBytes: z.number(), durationSec: z.number(), mimeType: z.string(), position: z.number() })),
-  layout: z.object({ presetId: z.string(), zones: z.array(z.object({ index: z.number(), name: z.string(), x: z.number(), y: z.number(), w: z.number(), h: z.number(), bindingKind: z.string().nullable(), refId: z.string().nullable() })) }).nullable(),
-  schedule: z.array(z.object({ id: z.string(), playlistId: z.string(), startsAt: z.string(), endsAt: z.string().nullable(), timezone: z.string() })),
-  canvas: z.object({ setId: z.string(), position: z.number(), total: z.number(), activateAt: z.string().nullable() }).nullable(),
+  /** Playback order for a playlist or template assignment (also a canvas's content). */
+  items: z.array(manifestItem),
+  layout: z.object({ presetId: z.string(), zones: z.array(z.object({ index: z.number(), name: z.string(), x: z.number(), y: z.number(), w: z.number(), h: z.number(), bindingKind: z.string().nullable(), refId: z.string().nullable(), items: z.array(manifestItem) })) }).nullable(),
+  /** Set when the assignment is a canvas: this screen's slot and the slice of the composition it shows (fractions). */
+  canvas: z.object({ setId: z.string(), position: z.number(), total: z.number(), activateAt: z.string().nullable(), viewport: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }), content: z.object({ kind: z.string(), refId: z.string() }).nullable() }).nullable(),
+  /** Live and upcoming schedules. A SCREEN schedule beats a GROUP schedule, which beats the assignment. */
+  schedule: z.array(z.object({ id: z.string(), playlistId: z.string(), name: z.string(), targetKind: z.enum(["SCREEN", "GROUP"]), startsAt: z.string(), endsAt: z.string().nullable(), timezone: z.string(), items: z.array(manifestItem) })),
+  /** Every file referenced above, once each, with a signed URL (1 hour). */
+  assets: z.array(z.object({ id: z.string(), type: z.string(), mimeType: z.string(), url: z.string(), checksum: z.string().nullable(), sizeBytes: z.number(), width: z.number().nullable(), height: z.number().nullable(), durationSec: z.number().nullable() })),
 }).openapi("Manifest");
 
 const tag = ["Player"];

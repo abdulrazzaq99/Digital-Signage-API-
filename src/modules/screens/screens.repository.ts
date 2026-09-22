@@ -33,11 +33,12 @@ export const screensRepository = {
   listGroups: (companyId: string) => prisma.screenGroup.findMany({ where: { companyId }, include: { members: { include: { screen: { select: { id: true, status: true } } } } }, orderBy: { name: "asc" } }),
   findGroup: (companyId: string, id: string) => prisma.screenGroup.findFirst({ where: { id, companyId }, include: { members: { include: { screen: { select: { id: true, status: true } } } } } }),
   createGroup: (data: Prisma.ScreenGroupUncheckedCreateInput) => prisma.screenGroup.create({ data, include: { members: { include: { screen: { select: { id: true, status: true } } } } } }),
-  updateGroup: (id: string, data: Prisma.ScreenGroupUncheckedUpdateInput) => prisma.screenGroup.update({ where: { id }, data, include: { members: { include: { screen: { select: { id: true, status: true } } } } } }),
-  deleteGroup: (id: string) => prisma.screenGroup.delete({ where: { id } }),
-  setGroupMembers: async (groupId: string, screenIds: string[]) => {
-    await prisma.screenGroupMember.deleteMany({ where: { groupId } });
-    if (screenIds.length) await prisma.screenGroupMember.createMany({ data: screenIds.map((screenId) => ({ groupId, screenId })), skipDuplicates: true });
+  updateGroup: (id: string, data: Prisma.ScreenGroupUncheckedUpdateInput, tx?: Tx) => (tx ?? prisma).screenGroup.update({ where: { id }, data, include: { members: { include: { screen: { select: { id: true, status: true } } } } } }),
+  deleteGroup: (id: string, tx?: Tx) => (tx ?? prisma).screenGroup.delete({ where: { id } }),
+  setGroupMembers: async (groupId: string, screenIds: string[], tx?: Tx) => {
+    const client = tx ?? prisma;
+    await client.screenGroupMember.deleteMany({ where: { groupId } });
+    if (screenIds.length) await client.screenGroupMember.createMany({ data: screenIds.map((screenId) => ({ groupId, screenId })), skipDuplicates: true });
   },
   countScreensInCompany: (companyId: string, ids: string[]) => prisma.screen.count({ where: { companyId, id: { in: ids } } }),
 };

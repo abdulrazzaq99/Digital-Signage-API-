@@ -1,4 +1,5 @@
 import { prisma } from "../../core/db/prisma.js";
+import type { Tx } from "../../core/db/transaction.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 
 export const scheduleInclude = { playlist: { select: { id: true, name: true } } } satisfies Prisma.ScheduleInclude;
@@ -7,9 +8,9 @@ export type ScheduleRow = Prisma.ScheduleGetPayload<{ include: typeof scheduleIn
 export const schedulesRepository = {
   list: (where: Prisma.ScheduleWhereInput, skip: number, take: number) => Promise.all([prisma.schedule.findMany({ where, include: scheduleInclude, orderBy: { startsAt: "asc" }, skip, take }), prisma.schedule.count({ where })]),
   findScoped: (companyId: string | undefined, id: string) => prisma.schedule.findFirst({ where: { id, ...(companyId ? { companyId } : {}) }, include: scheduleInclude }),
-  create: (data: Prisma.ScheduleUncheckedCreateInput) => prisma.schedule.create({ data, include: scheduleInclude }),
-  update: (id: string, data: Prisma.ScheduleUncheckedUpdateInput) => prisma.schedule.update({ where: { id }, data, include: scheduleInclude }),
-  delete: (id: string) => prisma.schedule.delete({ where: { id } }),
+  create: (data: Prisma.ScheduleUncheckedCreateInput, tx?: Tx) => (tx ?? prisma).schedule.create({ data, include: scheduleInclude }),
+  update: (id: string, data: Prisma.ScheduleUncheckedUpdateInput, tx?: Tx) => (tx ?? prisma).schedule.update({ where: { id }, data, include: scheduleInclude }),
+  delete: (id: string, tx?: Tx) => (tx ?? prisma).schedule.delete({ where: { id } }),
   /** Schedules on the same target whose window overlaps [startsAt, endsAt). Open-ended windows overlap everything after their start. */
   overlapping: (companyId: string, targetKind: "SCREEN" | "GROUP", targetId: string, startsAt: Date, endsAt: Date | null, excludeId?: string) =>
     prisma.schedule.findMany({

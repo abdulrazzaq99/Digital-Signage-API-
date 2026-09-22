@@ -1,6 +1,7 @@
 import { customAlphabet } from "nanoid";
 import type { z } from "zod";
 import { CREDENTIAL_RECLAIM_SEC, PAIRING_CODE_TTL_SEC } from "../../config/constants.js";
+import { changeContent } from "../../core/assignments/content.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, tenantWhere, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { randomToken, sha256 } from "../../core/auth/tokens.js";
@@ -166,7 +167,9 @@ export const screensService = {
   async update(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updateScreenBody>) {
     const existing = await repo.findScoped(scope.companyId, id);
     if (!existing || existing.pairingStatus !== "PAIRED") throw new NotFoundError("Screen");
-    const updated = await withTransaction(async (tx) => {
+    // Orientation is in the manifest and the group decides which schedules apply.
+    const manifestFields = (body.orientation !== undefined && body.orientation !== existing.orientation) || body.groupId !== undefined;
+    const updated = await changeContent(existing.companyId, manifestFields ? { screenIds: [id] } : {}, async (tx) => {
       const s = await repo.update(id, { name: body.name, location: body.location, orientation: body.orientation, tags: body.tags }, tx);
       if (body.groupId !== undefined) {
         if (body.groupId) {
@@ -223,11 +226,12 @@ export const screensService = {
     const companyId = requireCompanyId(scope);
     const existing = await repo.findGroup(companyId, id);
     if (!existing) throw new NotFoundError("Screen group");
-    if (body.screenIds) {
-      await assertScreensBelong(companyId, body.screenIds);
-      await repo.setGroupMembers(id, body.screenIds);
-    }
-    const g = await repo.updateGroup(id, { name: body.name, description: body.description });
+    if (body.screenIds) await assertScreensBelong(companyId, body.screenIds);
+    // Members joining or leaving gain or lose the group's schedules.
+    const g = await changeContent(companyId, body.screenIds ? { groupIds: [id] } : {}, async (tx) => {
+      if (body.screenIds) await repo.setGroupMembers(id, body.screenIds, tx);
+      return repo.updateGroup(id, { name: body.name, description: body.description }, tx);
+    });
     await logActivity({ companyId, actor, action: "group.updated", resourceType: "screen_group", resourceId: id, summary: `Group "${g.name}" updated` });
     return toGroupDto(g);
   },
@@ -235,7 +239,11 @@ export const screensService = {
     const companyId = requireCompanyId(scope);
     const existing = await repo.findGroup(companyId, id);
     if (!existing) throw new NotFoundError("Screen group");
-    await repo.deleteGroup(id);
+    // Its schedules can never apply again, so they go too; former members lose them.
+    await changeContent(companyId, { groupIds: [id] }, async (tx) => {
+      await tx.schedule.deleteMany({ where: { companyId, targetKind: "GROUP", targetId: id } });
+      await repo.deleteGroup(id, tx);
+    });
     await logActivity({ companyId, actor, action: "group.deleted", resourceType: "screen_group", resourceId: id, summary: `Group "${existing.name}" deleted; ${existing.members.length} screens ungrouped` });
   },
 };

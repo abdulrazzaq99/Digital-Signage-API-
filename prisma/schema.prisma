@@ -535,6 +535,12 @@ model TemplateInstance {
   name       String
   values     Json
   outputKey  String?
+  /// Details of the rendered file, sent to players with it.
+  outputMimeType  String?
+  outputChecksum  String?
+  outputSizeBytes Int?
+  outputWidth     Int?
+  outputHeight    Int?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

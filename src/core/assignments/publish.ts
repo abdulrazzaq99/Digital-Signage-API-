@@ -34,6 +34,8 @@ export async function publishAssignment(input: { actor: AuthUser; companyId: str
     const screens = await tx.screen.findMany({ where: { id: { in: ids }, companyId: input.companyId, pairingStatus: "PAIRED" }, select: { id: true, name: true, status: true, manifestVersion: true } });
     if (screens.length !== ids.length) throw new ValidationError("One or more target screens were not found", undefined, "SCREEN_NOT_FOUND");
 
+    // Canvas members report ready again once they have preloaded the new version.
+    await tx.canvasMember.updateMany({ where: { screenId: { in: ids } }, data: { ready: false } });
     const results: PublishResult["screens"] = [];
     for (const s of screens) {
       const version = s.manifestVersion + 1;

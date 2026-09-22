@@ -1,9 +1,9 @@
 import { nanoid } from "nanoid";
 import type { z } from "zod";
 import { ALLOWED_MIME, MAX_UPLOAD_BYTES } from "../../config/constants.js";
+import { changeContent } from "../../core/assignments/content.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, tenantWhere, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
-import { withTransaction } from "../../core/db/transaction.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
 import { enqueue, JobNames } from "../../core/queue/queues.js";
@@ -124,7 +124,8 @@ export const mediaService = {
     if (!m) throw new NotFoundError("Media");
     const usedIn = dedupe(m.playlistItems.map((i) => i.playlist));
     if (usedIn.length && !force) throw new ConflictError(`This file is used in ${usedIn.length} playlist${usedIn.length > 1 ? "s" : ""}`, "MEDIA_IN_USE", { usedIn });
-    await withTransaction(async (tx) => {
+    // Playlists and layout zones that showed it change, so their screens get a new manifest version.
+    await changeContent(m.companyId, { assetIds: [id] }, async (tx) => {
       if (usedIn.length) await repo.removeFromPlaylists(id, tx);
       await repo.delete(id, tx);
       await logActivity({ companyId: m.companyId, actor, action: "media.deleted", resourceType: "media", resourceId: id, summary: usedIn.length ? `${m.name} deleted and removed from ${usedIn.length} playlist(s)` : `${m.name} deleted`, meta: { usedIn } }, tx);

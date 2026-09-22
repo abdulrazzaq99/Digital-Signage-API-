@@ -13,7 +13,7 @@ export const playlistsRepository = {
   findScoped: (companyId: string | undefined, id: string, tx?: Tx) => (tx ?? prisma).playlist.findFirst({ where: { id, ...(companyId ? { companyId } : {}) }, include: playlistInclude }),
   create: (data: Prisma.PlaylistUncheckedCreateInput, tx?: Tx) => (tx ?? prisma).playlist.create({ data, include: playlistInclude }),
   update: (id: string, data: Prisma.PlaylistUncheckedUpdateInput, tx?: Tx) => (tx ?? prisma).playlist.update({ where: { id }, data, include: playlistInclude }),
-  delete: (id: string) => prisma.playlist.delete({ where: { id } }),
+  delete: (id: string, tx?: Tx) => (tx ?? prisma).playlist.delete({ where: { id } }),
   /**
    * Syncs the item rows to `items` while keeping existing item IDs stable: rows whose id is
    * present are updated in place, rows missing from the list are deleted, entries without an

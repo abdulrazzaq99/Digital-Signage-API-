@@ -1,10 +1,10 @@
 import type { z } from "zod";
 import { CANVAS_ACTIVATE_DELAY_MS } from "../../config/constants.js";
+import { changeContent } from "../../core/assignments/content.js";
 import { publishAssignment } from "../../core/assignments/publish.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
-import { withTransaction } from "../../core/db/transaction.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { Events } from "../../core/realtime/events.js";
 import { emitToCompany, emitToScreen } from "../../core/realtime/server.js";
@@ -17,9 +17,14 @@ type CanvasRow = Prisma.CanvasSetGetPayload<{ include: typeof include }>;
 
 async function toDto(c: CanvasRow) {
   const online = await onlineSet(c.members.map((m) => m.screenId));
-  const members = c.members.map((m) => ({ screenId: m.screenId, name: m.screen.name, location: m.screen.location, position: m.position, status: m.screen.status, orientation: m.screen.orientation, ready: online.has(m.screenId), synced: m.screen.ackVersion >= m.screen.manifestVersion }));
+  // Before activation a member is ready when it is online; once active, when it has also
+  // preloaded its segment (acknowledged the current manifest version).
+  const members = c.members.map((m) => {
+    const isOnline = online.has(m.screenId);
+    return { screenId: m.screenId, name: m.screen.name, location: m.screen.location, position: m.position, status: m.screen.status, orientation: m.screen.orientation, online: isOnline, preloaded: m.ready, ready: isOnline && (c.status !== "ACTIVE" || m.ready), synced: m.screen.ackVersion >= m.screen.manifestVersion };
+  });
   const readyCount = members.filter((m) => m.ready).length;
-  const status = c.status === "ACTIVE" && readyCount < members.length ? "DEGRADED" : c.status;
+  const status = c.status === "ACTIVE" && members.some((m) => !m.online) ? "DEGRADED" : c.status;
   return { id: c.id, name: c.name, status, members, readyCount, content: c.contentKind && c.contentRef ? { kind: c.contentKind, refId: c.contentRef } : null, activateAt: c.activateAt?.toISOString() ?? null, createdAt: c.createdAt.toISOString() };
 }
 
@@ -57,12 +62,16 @@ export const canvasService = {
     const companyId = requireCompanyId(scope);
     await findScoped(companyId, id);
     if (body.screenIds) await validateMembers(companyId, body.screenIds, id);
-    const c = await withTransaction(async (tx) => {
+    const reconfigured = !!body.screenIds || body.content !== undefined;
+    // Changing members or content returns the canvas to draft: it leaves the screens and must be
+    // activated again. Either way the screens showing it get a new manifest version.
+    const c = await changeContent(companyId, { canvasIds: [id] }, async (tx) => {
       if (body.screenIds) {
         await tx.canvasMember.deleteMany({ where: { setId: id } });
         await tx.canvasMember.createMany({ data: body.screenIds.map((screenId, position) => ({ setId: id, screenId, position })) });
       }
-      return tx.canvasSet.update({ where: { id }, data: { name: body.name, ...(body.content !== undefined ? { contentKind: body.content?.kind ?? null, contentRef: body.content?.refId ?? null } : {}), ...(body.screenIds || body.content !== undefined ? { status: "DRAFT", activateAt: null } : {}) }, include });
+      if (reconfigured) await tx.screenAssignment.deleteMany({ where: { kind: "CANVAS", refId: id } });
+      return tx.canvasSet.update({ where: { id }, data: { name: body.name, ...(body.content !== undefined ? { contentKind: body.content?.kind ?? null, contentRef: body.content?.refId ?? null } : {}), ...(reconfigured ? { status: "DRAFT", activateAt: null } : {}) }, include });
     });
     await logActivity({ companyId, actor, action: "canvas.updated", resourceType: "canvas", resourceId: id, summary: `Canvas "${c.name}" reconfigured`, meta: { fields: Object.keys(body) } });
     return toDto(c);
@@ -73,7 +82,8 @@ export const canvasService = {
     const c = await findScoped(companyId, id);
     if (!c.contentKind || !c.contentRef) throw new ValidationError("Assign content to the canvas before activating", undefined, "NO_CONTENT");
     const dto = await toDto(c);
-    if (dto.readyCount < dto.members.length) throw new ConflictError(`${dto.members.length - dto.readyCount} of ${dto.members.length} screens are not ready`, "CANVAS_DEGRADED", { members: dto.members.filter((m) => !m.ready).map((m) => m.name) });
+    const offline = dto.members.filter((m) => !m.online);
+    if (offline.length) throw new ConflictError(`${offline.length} of ${dto.members.length} screens are not ready`, "CANVAS_DEGRADED", { members: offline.map((m) => m.name) });
     const activateAt = new Date(Date.now() + CANVAS_ACTIVATE_DELAY_MS);
     await publishAssignment({ actor, companyId, kind: "CANVAS", refId: id, refName: c.name, target: { screenIds: c.members.map((m) => m.screenId) }, activateAt });
     const updated = await prisma.canvasSet.update({ where: { id }, data: { status: "ACTIVE", activateAt }, include });
@@ -84,9 +94,11 @@ export const canvasService = {
   async deactivate(actor: AuthUser, scope: TenantScope, id: string) {
     const companyId = requireCompanyId(scope);
     const c = await findScoped(companyId, id);
-    const updated = await prisma.canvasSet.update({ where: { id }, data: { status: "INACTIVE", activateAt: null }, include });
-    await prisma.screenAssignment.deleteMany({ where: { kind: "CANVAS", refId: id } });
-    for (const m of c.members) emitToScreen(m.screenId, Events.remoteRefresh, { reason: "canvas_deactivated" });
+    // Players get a new manifest version without the canvas.
+    const updated = await changeContent(companyId, { canvasIds: [id] }, async (tx) => {
+      await tx.screenAssignment.deleteMany({ where: { kind: "CANVAS", refId: id } });
+      return tx.canvasSet.update({ where: { id }, data: { status: "INACTIVE", activateAt: null }, include });
+    });
     await logActivity({ companyId, actor, action: "canvas.deactivated", resourceType: "canvas", resourceId: id, summary: `Canvas "${c.name}" deactivated` });
     return toDto(updated);
   },
