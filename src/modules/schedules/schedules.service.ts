@@ -55,6 +55,8 @@ export const schedulesService = {
   async update(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updateScheduleBody>) {
     const existing = await repo.findScoped(scope.companyId, id);
     if (!existing) throw new NotFoundError("Schedule");
+    // The playlist must belong to the schedule's company; IDs never cross tenants (spec 3.1).
+    if (body.playlistId && !(await prisma.playlist.count({ where: { id: body.playlistId, companyId: existing.companyId } }))) throw new ValidationError("Playlist not found", undefined, "PLAYLIST_NOT_FOUND");
     const startsAt = body.startsAt ? new Date(body.startsAt) : existing.startsAt;
     const endsAt = body.endsAt === undefined ? existing.endsAt : body.endsAt ? new Date(body.endsAt) : null;
     if (endsAt && endsAt <= startsAt) throw new ValidationError("endsAt must be after startsAt", undefined, "INVALID_WINDOW");

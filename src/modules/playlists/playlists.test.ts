@@ -181,4 +181,20 @@ describe("schedules", () => {
     const all = await api().get("/api/v1/schedules?activeOnly=false").set(ctx.auth);
     expect(all.body.data).toHaveLength(2);
   });
+
+  it("rejects a PATCH that points a schedule at another company's playlist", async () => {
+    const ctx = await customerContext();
+    const other = await customerContext();
+    const a = await readyAsset(ctx.company.id);
+    const screen = await pairedScreen(ctx.auth);
+    const mine = (await api().post("/api/v1/playlists").set(ctx.auth).send({ name: "Mine", items: [{ assetId: a.id, durationSec: 5 }] })).body.data;
+    const otherAsset = await readyAsset(other.company.id);
+    const theirs = (await api().post("/api/v1/playlists").set(other.auth).send({ name: "Theirs", items: [{ assetId: otherAsset.id, durationSec: 5 }] })).body.data;
+    const start = new Date(Date.now() + 3600_000).toISOString();
+    const sched = (await api().post("/api/v1/schedules").set(ctx.auth).set("Idempotency-Key", "x1").send({ playlistId: mine.id, targetKind: "SCREEN", targetId: screen.id, startsAt: start })).body.data;
+    const res = await api().patch(`/api/v1/schedules/${sched.id}`).set(ctx.auth).send({ playlistId: theirs.id });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("PLAYLIST_NOT_FOUND");
+    expect((await prisma.schedule.findUnique({ where: { id: sched.id } }))?.playlistId).toBe(mine.id);
+  });
 });
