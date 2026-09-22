@@ -4,7 +4,7 @@ import { io as ioClient } from "socket.io-client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../app.js";
 import { prisma } from "../db/prisma.js";
-import { customerContext } from "../../test/factories.js";
+import { customerContext, superAdminContext } from "../../test/factories.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
 import { Events } from "./events.js";
 import { closeRealtime, initRealtime } from "./server.js";
@@ -60,5 +60,18 @@ describe("realtime", () => {
     expect(await remote).toMatchObject({ by: ctx.user.id });
 
     player.close(); app.close();
+  });
+
+  it("delivers offer.published exactly once to a Super Admin socket", async () => {
+    const admin = await superAdminContext();
+    const offer = await prisma.offer.create({ data: { title: "Bundle deal", category: "Hardware", summary: "Two screens for one", description: "Buy one get one free on displays", instructions: "Call us", contact: { name: "Sales" } } });
+    const socket = ioClient(`${baseUrl}/app`, { auth: { token: admin.tokens.accessToken }, transports: ["websocket"] });
+    await new Promise<void>((r) => socket.on("connect", () => r()));
+    let received = 0;
+    socket.on(Events.offerPublished, () => { received++; });
+    expect((await api().post(`/api/v1/offers/${offer.id}/publish`).set(admin.auth)).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 300));
+    socket.close();
+    expect(received).toBe(1);
   });
 });

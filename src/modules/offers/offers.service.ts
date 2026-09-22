@@ -6,7 +6,7 @@ import { prisma } from "../../core/db/prisma.js";
 import { ForbiddenError, NotFoundError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
 import { Events } from "../../core/realtime/events.js";
-import { emitToPlatform, getIo } from "../../core/realtime/server.js";
+import { getIo } from "../../core/realtime/server.js";
 import { presignGet } from "../../core/storage/s3.js";
 import type { Offer, Prisma } from "../../generated/prisma/client.js";
 import type { createOfferBody, listOffersQuery, updateOfferBody } from "./offers.schemas.js";
@@ -75,10 +75,8 @@ export const offersService = {
     if (!existing) throw new NotFoundError("Offer");
     const o = await prisma.offer.update({ where: { id }, data: publish ? { status: "PUBLISHED", publishedAt: existing.publishedAt ?? new Date() } : { status: "UNPUBLISHED" } });
     await logActivity({ actor, action: publish ? "offer.published" : "offer.unpublished", resourceType: "offer", resourceId: id, summary: `Offer "${o.title}" ${publish ? "published to the Marketplace" : "unpublished"}` });
-    if (publish) {
-      emitToPlatform(Events.offerPublished, { offerId: o.id, title: o.title });
-      getIo()?.of("/app").emit(Events.offerPublished, { offerId: o.id, title: o.title });
-    }
+    // Every `/app` socket (customers and the Super Admin) gets the event once.
+    if (publish) getIo()?.of("/app").emit(Events.offerPublished, { offerId: o.id, title: o.title });
     return toDto(o, true);
   },
 
