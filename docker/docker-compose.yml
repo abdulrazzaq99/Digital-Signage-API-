@@ -4,7 +4,7 @@ x-api-env: &api-env
   NODE_ENV: production
   PORT: 4000
   LOG_LEVEL: info
-  CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
   DATABASE_URL: postgresql://dsp:dsp@postgres:5432/dsp?schema=public
   REDIS_URL: redis://redis:6379
   JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-access-secret-please-change-me-32chars}
@@ -12,12 +12,12 @@ x-api-env: &api-env
   JWT_ACCESS_TTL: 15m
   JWT_REFRESH_TTL: 30d
   S3_ENDPOINT: http://minio:9000
-  S3_PUBLIC_ENDPOINT: http://localhost:9000
+  # Hostname browsers and devices use to reach MinIO. Set to the machine's LAN IP to test on a phone or player.
+  S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
   S3_REGION: us-east-1
   S3_BUCKET: media
   S3_ACCESS_KEY: minio
   S3_SECRET_KEY: minio12345
-  S3_PUBLIC_URL: http://localhost:9000/media
   S3_FORCE_PATH_STYLE: "true"
   ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-}
   ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY:-}
@@ -69,11 +69,12 @@ services:
       - |
         mc alias set local http://minio:9000 minio minio12345 &&
         mc mb --ignore-existing local/media &&
-        mc anonymous set download local/media &&
-        echo "bucket ready"
+        mc anonymous set none local/media &&
+        echo "bucket ready (private; media is served through presigned URLs only)"
 
   migrate:
-    build: { context: .., dockerfile: docker/Dockerfile }
+    # Built from the stage that has the pinned Prisma CLI (a devDependency) installed.
+    build: { context: .., dockerfile: docker/Dockerfile, target: migrate }
     environment: *api-env
     depends_on:
       postgres: { condition: service_healthy }

@@ -13,7 +13,17 @@ This starts PostgreSQL, Redis, MinIO (media storage), runs migrations and the de
 
 - Health: `GET http://localhost:4000/health`
 - OpenAPI docs: http://localhost:4000/docs
-- MinIO console: http://localhost:9001 (minio / minio12345)
+- MinIO console: http://localhost:9001 (minio / minio12345). The bucket is private; clients only ever get presigned URLs.
+
+### Testing on a phone or a physical player
+
+Signed media URLs point at `S3_PUBLIC_ENDPOINT` (default `http://localhost:9000`), which a phone cannot reach. Start the stack with your machine's LAN IP instead:
+
+```bash
+S3_PUBLIC_ENDPOINT=http://192.168.1.20:9000 docker compose -f docker/docker-compose.yml up --build
+```
+
+Point the app or player at `http://192.168.1.20:4000` (REST and Socket.IO). The same variables can live in `docker/.env`, which Compose reads automatically. Add web origins to `CORS_ORIGINS` the same way if a browser on another machine needs access.
 
 ## Local development
 
@@ -30,9 +40,11 @@ npm run dev:worker         # background jobs
 ## Tests
 
 ```bash
-docker compose -f docker/docker-compose.test.yml up -d
+docker compose -f docker/docker-compose.test.yml up -d   # Postgres :5433, Redis :6380, MinIO :9002
 npm test
 ```
+
+Tests read `.env.test` when present, otherwise the committed `.env.test.example`, whose values match `docker-compose.test.yml` (bucket `media-test`, created automatically).
 
 ## Project structure
 

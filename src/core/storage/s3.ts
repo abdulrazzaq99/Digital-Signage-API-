@@ -37,7 +37,3 @@ export async function headObject(key: string): Promise<{ size: number; contentTy
 export async function deleteObject(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => undefined);
 }
-
-export function publicUrl(key: string): string {
-  return `${env.S3_PUBLIC_URL}/${key}`;
-}

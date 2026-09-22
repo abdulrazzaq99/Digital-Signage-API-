@@ -21,7 +21,6 @@ export const envSchema = z.object({
   S3_BUCKET: z.string().min(1),
   S3_ACCESS_KEY: z.string().min(1),
   S3_SECRET_KEY: z.string().min(1),
-  S3_PUBLIC_URL: z.string().url(),
   S3_FORCE_PATH_STYLE: z.stringbool().default(true),
   ONESIGNAL_APP_ID: z.string().optional().transform((v) => v || undefined),
   ONESIGNAL_API_KEY: z.string().optional().transform((v) => v || undefined),

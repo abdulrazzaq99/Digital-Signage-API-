@@ -9,6 +9,10 @@ COPY src ./src
 # prisma generate only needs the variable to exist; it never connects at build time
 RUN DATABASE_URL="postgresql://build:build@localhost:5432/build" npx prisma generate && npm run build
 
+# ---- one-shot migrate + seed: reuses the build stage so the pinned Prisma CLI is available ----
+FROM build AS migrate
+CMD ["/bin/sh", "-c", "npx prisma migrate deploy && node dist/prisma/seed.js"]
+
 # ---- production dependencies only ----
 FROM node:22-alpine AS deps
 WORKDIR /app

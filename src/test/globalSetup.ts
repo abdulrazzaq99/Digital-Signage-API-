@@ -1,10 +1,11 @@
 import { execSync } from "node:child_process";
 import { CreateBucketCommand, HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { config } from "dotenv";
+import { testEnvFile } from "./envFile.js";
 
-/** Runs once before the test suite: load .env.test and apply migrations to the test database. */
+/** Runs once before the test suite: load the test env file and apply migrations to the test database. */
 export default async function globalSetup(): Promise<void> {
-  config({ path: ".env.test", override: true });
+  config({ path: testEnvFile, override: true });
   execSync("npx prisma migrate deploy", { stdio: "inherit", env: { ...process.env } });
   await ensureBucket();
 }
