@@ -90,6 +90,13 @@ describe("scratch campaigns", () => {
     expect(replay.status).toBe(200);
     expect(replay.body.data.attemptId).toBe(win.body.data.attemptId);
     expect(await prisma.scratchAttempt.count()).toBe(1);
+
+    // Reopening the campaign later still shows what the user won.
+    const later = await api().get(`/api/v1/campaigns/${gated.id}/eligibility`).set(ctx.auth);
+    expect(later.body.data).toMatchObject({ eligible: false, reason: "ATTEMPTS_EXHAUSTED", attemptsRemaining: 0 });
+    expect(later.body.data.attempts).toEqual([{ attemptId: win.body.data.attemptId, outcome: "WIN", prize: { id: expect.any(String), name: "Content Pack", value: "£320" }, redemption: "PENDING", createdAt: expect.any(String) }]);
+    const someoneElse = await customerContext();
+    expect((await api().get(`/api/v1/campaigns/${gated.id}/eligibility`).set(someoneElse.auth)).body.data.attempts).toEqual([]);
   });
 
   it("never awards more prizes than exist under concurrent attempts", async () => {

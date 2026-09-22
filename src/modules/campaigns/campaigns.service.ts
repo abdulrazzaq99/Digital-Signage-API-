@@ -133,9 +133,16 @@ export const campaignsService = {
 
   async eligibility(actor: AuthUser, id: string) {
     const c = await findCampaign(id);
-    const attemptsUsed = await prisma.scratchAttempt.count({ where: { campaignId: id, userId: actor.id } });
+    const attempts = await prisma.scratchAttempt.findMany({ where: { campaignId: id, userId: actor.id }, orderBy: { createdAt: "desc" }, include: { prize: true, winner: { select: { redemption: true } } } });
+    const attemptsUsed = attempts.length;
     const reason = await eligibilityReason(c, actor, attemptsUsed);
-    return { eligible: !reason, reason, attemptsUsed, attemptsRemaining: Math.max(0, c.maxAttempts - attemptsUsed) };
+    return {
+      eligible: !reason,
+      reason,
+      attemptsUsed,
+      attemptsRemaining: Math.max(0, c.maxAttempts - attemptsUsed),
+      attempts: attempts.map((a) => ({ attemptId: a.id, outcome: a.outcome, prize: a.prize ? { id: a.prize.id, name: a.prize.name, value: a.prize.value } : null, redemption: a.winner?.redemption ?? null, createdAt: a.createdAt.toISOString() })),
+    };
   },
 
   /**
