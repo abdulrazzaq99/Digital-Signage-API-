@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { queryFlag } from "../../core/http/query.js";
 import { paginationQuery } from "../../core/http/pagination.js";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
 
 export const idParams = z.object({ id: z.string().min(1) });
 export const targetKind = z.enum(["SCREEN", "GROUP"]);
-export const listSchedulesQuery = paginationQuery.extend({ targetKind: targetKind.optional(), targetId: z.string().optional(), playlistId: z.string().optional(), activeOnly: z.stringbool().default(false) });
+export const listSchedulesQuery = paginationQuery.extend({ targetKind: targetKind.optional(), targetId: z.string().optional(), playlistId: z.string().optional(), activeOnly: queryFlag(false) });
 export const activeQuery = z.object({ screenId: z.string().min(1), at: z.string().datetime().optional() });
 const base = { playlistId: z.string().min(1), targetKind, targetId: z.string().min(1), startsAt: z.string().datetime(), endsAt: z.string().datetime().nullable().optional(), timezone: z.string().min(1).max(64).default("UTC") };
 export const createScheduleBody = z.object(base).refine((b) => !b.endsAt || new Date(b.endsAt) > new Date(b.startsAt), { message: "endsAt must be after startsAt", path: ["endsAt"] }).openapi("CreateScheduleBody");

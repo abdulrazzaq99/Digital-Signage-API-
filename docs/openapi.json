@@ -5155,7 +5155,7 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "boolean"
             },
             "required": false,
             "name": "personal",
@@ -6401,7 +6401,7 @@
           },
           {
             "schema": {
-              "type": "string",
+              "type": "boolean",
               "default": false
             },
             "required": false,
@@ -7269,7 +7269,7 @@
           },
           {
             "schema": {
-              "type": "string",
+              "type": "boolean",
               "default": false
             },
             "required": false,

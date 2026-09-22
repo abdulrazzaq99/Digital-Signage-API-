@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { queryFlag } from "../../core/http/query.js";
 import { paginationQuery } from "../../core/http/pagination.js";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
 
@@ -11,7 +12,7 @@ export const listScreensQuery = paginationQuery.extend({
   status: screenStatus.optional(),
   groupId: z.string().optional(),
   orientation: orientation.optional(),
-  personal: z.stringbool().optional(),
+  personal: queryFlag(),
 });
 
 export const pairBody = z.object({
