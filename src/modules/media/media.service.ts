@@ -12,7 +12,11 @@ import type { Prisma } from "../../generated/prisma/client.js";
 import { mediaRepository as repo, type MediaRow } from "./media.repository.js";
 import type { finalizeBody, listMediaQuery, updateMediaBody, uploadUrlBody } from "./media.schemas.js";
 
-const UPLOAD_URL_TTL_SEC = 15 * 60;
+/**
+ * Presigned PUT lifetime: at least 15 minutes, or long enough to send the file at ~50 KB/s (a weak
+ * mobile uplink), capped at 6 hours. Storage checks expiry when the PUT starts.
+ */
+export const uploadUrlTtlSec = (sizeBytes: number) => Math.min(6 * 60 * 60, Math.max(15 * 60, Math.ceil(sizeBytes / 50_000)));
 
 export async function toMediaDto(m: MediaRow) {
   const thumb = m.derivatives[0]?.storageKey;
@@ -53,8 +57,23 @@ export const mediaService = {
     const type = ALLOWED_MIME[body.contentType];
     const storageKey = `${companyId}/${nanoid(12)}/${sanitizeFileName(body.fileName)}`;
     const asset = await repo.create({ companyId, name: sanitizeFileName(body.fileName), type, status: "UPLOADING", mimeType: body.contentType, sizeBytes: BigInt(body.sizeBytes), storageKey, tags: body.tags, uploadedById: actor.id });
-    const uploadUrl = await presignPut(storageKey, body.contentType, UPLOAD_URL_TTL_SEC);
-    return { asset: await toMediaDto(asset), uploadUrl, expiresInSec: UPLOAD_URL_TTL_SEC };
+    const ttl = uploadUrlTtlSec(body.sizeBytes);
+    const uploadUrl = await presignPut(storageKey, body.contentType, ttl);
+    return { asset: await toMediaDto(asset), uploadUrl, expiresInSec: ttl };
+  },
+
+  /**
+   * A fresh upload URL for an asset whose upload never completed (connection lost, URL expired,
+   * finalize failed), so a retry reuses the asset instead of creating another one.
+   */
+  async reissueUploadUrl(scope: TenantScope, id: string) {
+    const m = await repo.findScoped(scope.companyId, id);
+    if (!m) throw new NotFoundError("Media");
+    if (m.status !== "UPLOADING" && m.status !== "FAILED") throw new ConflictError("This file has already been uploaded", "NOT_UPLOADING");
+    // Also moves updatedAt, which restarts the abandoned-upload clock.
+    const updated = await repo.update(id, { status: "UPLOADING", failureReason: null });
+    const ttl = uploadUrlTtlSec(Number(m.sizeBytes));
+    return { asset: await toMediaDto(updated), uploadUrl: await presignPut(m.storageKey, m.mimeType, ttl), expiresInSec: ttl };
   },
 
   /**

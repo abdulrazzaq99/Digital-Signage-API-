@@ -3,6 +3,8 @@ import { prisma } from "../../core/db/prisma.js";
 import { customerContext } from "../../test/factories.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
 import { mediaConvert } from "../../jobs/media.convert.js";
+import { mediaCleanup } from "../../jobs/media.cleanup.js";
+import { headObject } from "../../core/storage/s3.js";
 
 beforeEach(resetDatabase);
 afterAll(closeAll);
@@ -110,5 +112,50 @@ describe("media access and deletion", () => {
     const res = await api().post(`/api/v1/media/${asset.id}/retry`).set(ctx.auth);
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({ status: "PROCESSING", failureReason: null });
+  });
+});
+
+describe("resumable uploads", () => {
+  it("scales the upload URL lifetime with the file size", async () => {
+    const ctx = await customerContext();
+    const small = await api().post("/api/v1/media/upload-url").set(ctx.auth).send({ fileName: "a.png", contentType: "image/png", sizeBytes: 50_000 });
+    expect(small.body.data.expiresInSec).toBe(15 * 60);
+    const big = await api().post("/api/v1/media/upload-url").set(ctx.auth).send({ fileName: "b.mp4", contentType: "video/mp4", sizeBytes: 400 * 1_048_576 });
+    expect(big.body.data.expiresInSec).toBeGreaterThan(60 * 60);
+    expect(big.body.data.expiresInSec).toBeLessThanOrEqual(6 * 60 * 60);
+  });
+
+  it("re-issues an upload URL for the same asset instead of creating a new one", async () => {
+    const ctx = await customerContext();
+    const first = await api().post("/api/v1/media/upload-url").set(ctx.auth).send({ fileName: "pixel.png", contentType: "image/png", sizeBytes: PNG.length });
+    const id = first.body.data.asset.id as string;
+    const again = await api().post(`/api/v1/media/${id}/upload-url`).set(ctx.auth);
+    expect(again.status).toBe(200);
+    expect(again.body.data.asset.id).toBe(id);
+    expect(again.body.data.expiresInSec).toBe(15 * 60);
+    expect((await fetch(again.body.data.uploadUrl, { method: "PUT", body: PNG, headers: { "Content-Type": "image/png" } })).status).toBe(200);
+    expect((await api().post(`/api/v1/media/${id}/finalize`).set(ctx.auth).send({})).body.data.status).toBe("READY");
+    expect(await prisma.mediaAsset.count()).toBe(1);
+
+    const done = await api().post(`/api/v1/media/${id}/upload-url`).set(ctx.auth);
+    expect(done.status).toBe(409);
+    expect(done.body.error.code).toBe("NOT_UPLOADING");
+    const other = await customerContext();
+    expect((await api().post(`/api/v1/media/${id}/upload-url`).set(other.auth)).status).toBe(404);
+  });
+
+  it("cleans up uploads abandoned for more than 24 hours", async () => {
+    const ctx = await customerContext();
+    const stale = await upload(ctx.auth, { fileName: "stale.png" });
+    const fresh = await upload(ctx.auth, { fileName: "fresh.png" });
+    const finished = await upload(ctx.auth, { fileName: "done.png" });
+    await api().post(`/api/v1/media/${finished.asset.id}/finalize`).set(ctx.auth).send({});
+    const old = new Date(Date.now() - 25 * 3600_000);
+    await prisma.$executeRaw`UPDATE "MediaAsset" SET "updatedAt" = ${old} WHERE "id" IN (${stale.asset.id}, ${finished.asset.id})`;
+    const staleKey = (await prisma.mediaAsset.findUniqueOrThrow({ where: { id: stale.asset.id } })).storageKey;
+
+    expect(await mediaCleanup()).toEqual({ removed: 1 });
+    expect((await prisma.mediaAsset.findMany({ orderBy: { name: "asc" } })).map((m) => m.name)).toEqual(["done.png", "fresh.png"]);
+    expect(await headObject(staleKey)).toBeNull();
   });
 });

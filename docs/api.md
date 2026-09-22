@@ -74,6 +74,7 @@ Login 10/min per IP · pairing 20/min per IP · pairing session polling 120/min 
 
 1. `POST /media/upload-url { fileName, contentType, sizeBytes }` → `{ asset, uploadUrl }`.
 2. `PUT` the bytes to `uploadUrl` with the same `Content-Type` (direct to storage, never through the API).
+   If the connection drops or the URL expires, call `POST /media/{id}/upload-url` for a fresh URL to the same asset (allowed while it is `UPLOADING` or `FAILED`) and PUT again. URL lifetime grows with the declared size, from 15 minutes up to 6 hours. Uploads left `UPLOADING` for 24 hours are deleted.
 3. `POST /media/{id}/finalize { width?, height?, durationSec?, pages? }`. The API verifies the object, size, and type; images become `READY`, video and PDF become `PROCESSING` until the worker finishes and emits `media.ready`.
 
 ## Real-time events (Socket.IO)

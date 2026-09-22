@@ -26,7 +26,9 @@ export const mediaDto = z.object({
 const tag = ["Media"];
 const sec = [{ bearerAuth: [] }];
 registry.registerPath({ method: "get", path: "/media", tags: tag, security: sec, request: { query: listMediaQuery }, responses: { 200: jsonBody(envelope(z.array(mediaDto))) } });
-registry.registerPath({ method: "post", path: "/media/upload-url", tags: tag, security: sec, request: { body: jsonBody(uploadUrlBody) }, responses: { 201: jsonBody(envelope(z.object({ asset: mediaDto, uploadUrl: z.string(), expiresInSec: z.number() }))), 400: jsonBody(ErrorEnvelope) } });
+const uploadUrlDto = z.object({ asset: mediaDto, uploadUrl: z.string(), expiresInSec: z.number() }).openapi("UploadUrl");
+registry.registerPath({ method: "post", path: "/media/upload-url", tags: tag, security: sec, description: "Creates the asset and a presigned PUT URL. The lifetime grows with the file size (15 minutes to 6 hours).", request: { body: jsonBody(uploadUrlBody) }, responses: { 201: jsonBody(envelope(uploadUrlDto)), 400: jsonBody(ErrorEnvelope) } });
+registry.registerPath({ method: "post", path: "/media/{id}/upload-url", tags: tag, security: sec, description: "A fresh presigned PUT URL for an asset that is still UPLOADING or FAILED. Uploads left UPLOADING for 24 hours are deleted.", request: { params: idParams }, responses: { 200: jsonBody(envelope(uploadUrlDto)), 404: jsonBody(ErrorEnvelope), 409: jsonBody(ErrorEnvelope) } });
 registry.registerPath({ method: "post", path: "/media/{id}/finalize", tags: tag, security: sec, request: { params: idParams, body: jsonBody(finalizeBody) }, responses: { 200: jsonBody(envelope(mediaDto)), 400: jsonBody(ErrorEnvelope) } });
 registry.registerPath({ method: "get", path: "/media/{id}", tags: tag, security: sec, request: { params: idParams }, responses: { 200: jsonBody(envelope(mediaDto)), 404: jsonBody(ErrorEnvelope) } });
 registry.registerPath({ method: "patch", path: "/media/{id}", tags: tag, security: sec, request: { params: idParams, body: jsonBody(updateMediaBody) }, responses: { 200: jsonBody(envelope(mediaDto)) } });

@@ -21,6 +21,10 @@ export const mediaController = {
     const { body } = input<z.infer<typeof uploadUrlBody>>(req);
     created(res, await service.createUploadUrl(req.user!, req.scope, body));
   },
+  async reissueUploadUrl(req: Request, res: Response) {
+    const { params } = input<unknown, unknown, P>(req);
+    ok(res, await service.reissueUploadUrl(req.scope, params.id));
+  },
   async finalize(req: Request, res: Response) {
     const { body, params } = input<z.infer<typeof finalizeBody>, unknown, P>(req);
     ok(res, await service.finalize(req.user!, req.scope, params.id, body));

@@ -14,6 +14,7 @@ mediaRouter.get("/", authorize(), validate({ query: listMediaQuery }), asyncHand
 mediaRouter.post("/upload-url", authorize({ roles: [...editors] }), validate({ body: uploadUrlBody }), asyncHandler(c.uploadUrl));
 mediaRouter.get("/:id", authorize(), validate({ params: idParams }), asyncHandler(c.get));
 mediaRouter.get("/:id/download-url", authorize(), validate({ params: idParams }), asyncHandler(c.downloadUrl));
+mediaRouter.post("/:id/upload-url", authorize({ roles: [...editors] }), validate({ params: idParams }), asyncHandler(c.reissueUploadUrl));
 mediaRouter.post("/:id/finalize", authorize({ roles: [...editors] }), validate({ params: idParams, body: finalizeBody }), asyncHandler(c.finalize));
 mediaRouter.post("/:id/retry", authorize({ roles: [...editors] }), validate({ params: idParams }), asyncHandler(c.retry));
 mediaRouter.patch("/:id", authorize({ roles: [...editors] }), validate({ params: idParams, body: updateMediaBody }), asyncHandler(c.update));

@@ -9,6 +9,9 @@ export const PASSWORD_RESET_TTL_SEC = 60 * 60;
 export const INVITE_TTL_SEC = 7 * 24 * 60 * 60;
 export const PRESENCE_TTL_SEC = 90;
 export const PRESENCE_SWEEP_INTERVAL_MS = 30_000;
+/** Uploads still UPLOADING this long after their last URL was issued are deleted by the worker. */
+export const ABANDONED_UPLOAD_SEC = 24 * 60 * 60;
+export const MEDIA_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 export const ALLOWED_MIME = {
   "image/jpeg": "IMAGE",
