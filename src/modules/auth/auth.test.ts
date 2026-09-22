@@ -3,7 +3,11 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { env } from "../../config/env.js";
 import { sha256 } from "../../core/auth/tokens.js";
 import { redis } from "../../core/redis/client.js";
+import { getMailProvider, setMailProvider } from "../../core/mail/index.js";
+import { NoopMailProvider } from "../../core/mail/noop.js";
+import { mailSend } from "../../jobs/mail.send.js";
 import { createUser } from "../../test/factories.js";
+import { linkToken, queuedMail } from "../../test/mail.js";
 import { refreshGraceKey } from "./auth.service.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
 
@@ -129,9 +133,36 @@ describe("GET /auth/me", () => {
 });
 
 describe("password reset and change", () => {
-  it("forgot-password always returns 202", async () => {
+  it("forgot-password always returns 202 and mails nobody for an unknown address", async () => {
     const res = await api().post("/api/v1/auth/forgot-password").send({ email: "nobody@test.local" });
     expect(res.status).toBe(202);
+    expect(await queuedMail("nobody@test.local")).toHaveLength(0);
+  });
+
+  it("emails an HTTPS-style reset link whose token sets a new password once", async () => {
+    const user = await createUser();
+    expect((await api().post("/api/v1/auth/forgot-password").send({ email: user.email })).status).toBe(202);
+    const [mail] = await queuedMail(user.email);
+    expect(mail?.subject).toMatch(/reset/i);
+    expect(mail?.text).toContain(`${env.APP_PUBLIC_URL}/reset-password?token=`);
+    expect(mail?.html).toContain("/reset-password?token=");
+    const token = linkToken(mail);
+    expect((await api().post("/api/v1/auth/reset-password").send({ token, password: "Fresh-Passw0rd" })).status).toBe(204);
+    expect((await api().post("/api/v1/auth/login").send({ email: user.email, password: "Fresh-Passw0rd" })).status).toBe(200);
+    const again = await api().post("/api/v1/auth/reset-password").send({ token, password: "Another-Passw0rd" });
+    expect(again.body.error.code).toBe("RESET_INVALID");
+  });
+
+  it("the mail job delivers through the configured provider", async () => {
+    const original = getMailProvider();
+    const capture = new NoopMailProvider();
+    setMailProvider(capture);
+    try {
+      await mailSend({ to: "someone@test.local", subject: "Hello", text: "Body" });
+    } finally {
+      setMailProvider(original);
+    }
+    expect(capture.sent).toEqual([{ to: "someone@test.local", subject: "Hello", text: "Body" }]);
   });
 
   it("change-password requires the current password and invalidates sessions", async () => {

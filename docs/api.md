@@ -48,6 +48,12 @@ Every response carries `X-Request-Id`; send your own to correlate logs.
 
 Login 10/min per IP · pairing 20/min per IP · pairing session polling 120/min · scratch attempts 30/min per user. Limits are reported in `RateLimit-*` headers.
 
+## Password reset and invites
+
+- `POST /auth/forgot-password { email }` always answers 202. If the account exists, the worker emails a link `{APP_PUBLIC_URL}/reset-password?token=…`, valid for one hour and usable once.
+- `POST /users` without a `password` invites the user: they get an email with the same kind of link, valid for 7 days, to choose their first password. No temporary password is issued.
+- Both links are completed with `POST /auth/reset-password { token, password }` (204), which also signs out every existing session. The web app serves `/reset-password`; the mobile apps can claim the same URL as a Universal Link / App Link and read `token` from the query string.
+
 ## Pairing sequence
 
 1. Player: `POST /player/pairing-sessions { deviceId, model, playerVersion }` → `{ sessionId, code }` (code valid 5 minutes).

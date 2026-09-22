@@ -10,6 +10,8 @@ import { JobNames, QUEUE_NAME } from "./core/queue/queues.js";
 import { mediaConvert } from "./jobs/media.convert.js";
 import { templateRender } from "./jobs/template.render.js";
 import { notificationSend } from "./jobs/notification.send.js";
+import { mailSend } from "./jobs/mail.send.js";
+import type { MailMessage } from "./core/mail/MailProvider.js";
 
 /** BullMQ worker bootstrap; job processors are registered as modules are built. */
 logger.info({ env: env.NODE_ENV }, "Worker starting");
@@ -24,6 +26,8 @@ const worker = new Worker(
         return templateRender(job.data as { instanceId: string; companyId: string });
       case JobNames.notificationSend:
         return notificationSend(job.data as { notificationId: string });
+      case JobNames.mailSend:
+        return mailSend(job.data as MailMessage);
       default:
         logger.warn({ name: job.name }, "unknown job");
     }

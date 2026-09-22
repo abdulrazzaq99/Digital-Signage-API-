@@ -9,4 +9,5 @@ export const usersRepository = {
   create: (data: Prisma.UserUncheckedCreateInput) => prisma.user.create({ data }),
   update: (id: string, data: Prisma.UserUncheckedUpdateInput) => prisma.user.update({ where: { id }, data }),
   delete: (id: string) => prisma.user.delete({ where: { id } }),
+  findCompany: (id: string) => prisma.company.findUnique({ where: { id }, select: { name: true } }),
 };

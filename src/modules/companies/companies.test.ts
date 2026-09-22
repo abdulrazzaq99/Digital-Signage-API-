@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../../core/db/prisma.js";
 import { createCompany, createUser, customerContext, superAdminContext } from "../../test/factories.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
+import { linkToken, queuedMail } from "../../test/mail.js";
 
 beforeEach(resetDatabase);
 afterAll(closeAll);
@@ -84,6 +85,14 @@ describe("users", () => {
     const res = await api().post("/api/v1/users").set(ctx.auth).send({ email: "New@Test.local", name: "New Person", role: "EDITOR" });
     expect(res.status).toBe(201);
     expect(res.body.data).toMatchObject({ email: "new@test.local", status: "INVITED", role: "EDITOR" });
+    // The invitee gets a set-password link (valid 7 days), not a temporary password.
+    const [mail] = await queuedMail("new@test.local");
+    expect(mail?.subject).toContain(ctx.company.name);
+    expect(mail?.text).toContain(ctx.user.name);
+    const reset = await prisma.passwordReset.findFirst({ where: { userId: res.body.data.id } });
+    expect(reset!.expiresAt.getTime() - Date.now()).toBeGreaterThan(6 * 86_400_000);
+    expect((await api().post("/api/v1/auth/reset-password").send({ token: linkToken(mail), password: "Invitee-Passw0rd" })).status).toBe(204);
+    expect((await api().post("/api/v1/auth/login").send({ email: "new@test.local", password: "Invitee-Passw0rd" })).status).toBe(200);
     const dup = await api().post("/api/v1/users").set(ctx.auth).send({ email: "new@test.local", name: "Again", role: "VIEWER" });
     expect(dup.status).toBe(409);
     expect(dup.body.error.code).toBe("EMAIL_TAKEN");

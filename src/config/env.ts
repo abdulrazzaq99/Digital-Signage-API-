@@ -24,6 +24,11 @@ export const envSchema = z.object({
   S3_FORCE_PATH_STYLE: z.stringbool().default(true),
   ONESIGNAL_APP_ID: z.string().optional().transform((v) => v || undefined),
   ONESIGNAL_API_KEY: z.string().optional().transform((v) => v || undefined),
+  /** e.g. smtp://user:pass@smtp.example.com:587 or smtp://mailpit:1025 in dev; unset = mail is logged, not sent. */
+  SMTP_URL: z.string().optional().transform((v) => v || undefined),
+  MAIL_FROM: z.string().default("Digital Signage <no-reply@localhost>"),
+  /** Public origin of the web app; reset and invite links point here (and the mobile apps intercept them). */
+  APP_PUBLIC_URL: z.string().url().default("http://localhost:3000"),
 });
 
 export type Env = z.infer<typeof envSchema>;

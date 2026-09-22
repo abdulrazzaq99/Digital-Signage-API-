@@ -21,6 +21,11 @@ x-api-env: &api-env
   S3_FORCE_PATH_STYLE: "true"
   ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-}
   ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY:-}
+  # Mail goes to Mailpit (inbox at http://localhost:8025) unless SMTP_URL points at a real relay.
+  SMTP_URL: ${SMTP_URL:-smtp://mailpit:1025}
+  MAIL_FROM: ${MAIL_FROM:-Digital Signage <no-reply@localhost>}
+  # Origin of the web app; password reset and invite links point here.
+  APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
 
 services:
   postgres:
@@ -60,6 +65,10 @@ services:
       timeout: 3s
       retries: 20
 
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8025:8025", "1025:1025"]
+
   minio-init:
     image: quay.io/minio/mc:latest
     depends_on:
@@ -98,6 +107,7 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
+      mailpit: { condition: service_started }
     restart: unless-stopped
 
 volumes:

@@ -1,10 +1,12 @@
 import argon2 from "argon2";
 import { nanoid } from "nanoid";
-import { REFRESH_REUSE_GRACE_SEC } from "../../config/constants.js";
+import { PASSWORD_RESET_TTL_SEC, REFRESH_REUSE_GRACE_SEC } from "../../config/constants.js";
 import { env } from "../../config/env.js";
 import type { AuthUser } from "../../core/auth/scope.js";
 import { randomToken, sha256, signAccess, signRefresh, ttlToMs, verifyRefresh } from "../../core/auth/tokens.js";
 import { ForbiddenError, UnauthorizedError, ValidationError } from "../../core/errors/AppError.js";
+import { queueMail } from "../../core/mail/index.js";
+import { passwordResetEmail } from "../../core/mail/templates.js";
 import { logger } from "../../core/middleware/logger.js";
 import { redis } from "../../core/redis/client.js";
 import type { User } from "../../generated/prisma/client.js";
@@ -30,6 +32,13 @@ async function issueTokens(user: User, familyId: string, meta?: { userAgent?: st
   const refreshToken = signRefresh(user.id, jti, familyId);
   await repo.createRefreshToken({ userId: user.id, tokenHash: sha256(refreshToken), familyId, expiresAt: new Date(Date.now() + ttlToMs(env.JWT_REFRESH_TTL)), ...meta });
   return { accessToken: signAccess(toAuthUser(user)), refreshToken, expiresIn: Math.floor(ttlToMs(env.JWT_ACCESS_TTL) / 1000), user: toDto(user) };
+}
+
+/** A single-use token for the reset-password page: forgot-password (1 hour) and invites (7 days). */
+export async function issuePasswordToken(userId: string, ttlSec: number): Promise<string> {
+  const token = randomToken(32);
+  await repo.createPasswordReset({ userId, tokenHash: sha256(token), expiresAt: new Date(Date.now() + ttlSec * 1000) });
+  return token;
 }
 
 export const refreshGraceKey = (tokenHash: string) => `refresh:grace:${tokenHash}`;
@@ -98,10 +107,8 @@ export const authService = {
   async forgotPassword(email: string): Promise<void> {
     const user = await repo.findUserByEmail(email);
     if (!user) return; // do not reveal whether the email exists
-    const token = randomToken(32);
-    await repo.createPasswordReset({ userId: user.id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 60 * 60 * 1000) });
-    // Mail delivery is a provider concern; the token is logged in non-production for manual testing.
-    if (env.NODE_ENV !== "production") logger.info({ email, token }, "Password reset token issued");
+    const token = await issuePasswordToken(user.id, PASSWORD_RESET_TTL_SEC);
+    await queueMail(passwordResetEmail(user, token));
   },
 
   async resetPassword(token: string, password: string): Promise<void> {

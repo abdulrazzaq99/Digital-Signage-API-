@@ -5,6 +5,7 @@ export const JobNames = {
   mediaConvert: "media.convert",
   templateRender: "template.render",
   notificationSend: "notification.send",
+  mailSend: "mail.send",
   presenceSweep: "presence.sweep",
 } as const;
 

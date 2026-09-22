@@ -5,6 +5,8 @@ export const PAIRING_CODE_TTL_SEC = 5 * 60;
 export const CREDENTIAL_RECLAIM_SEC = 10 * 60;
 /** A just-rotated refresh token is still accepted this long, returning the same new pair (parallel requests, tabs, retries). */
 export const REFRESH_REUSE_GRACE_SEC = 20;
+export const PASSWORD_RESET_TTL_SEC = 60 * 60;
+export const INVITE_TTL_SEC = 7 * 24 * 60 * 60;
 export const PRESENCE_TTL_SEC = 90;
 export const PRESENCE_SWEEP_INTERVAL_MS = 30_000;
 export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;

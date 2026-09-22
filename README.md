@@ -14,6 +14,7 @@ This starts PostgreSQL, Redis, MinIO (media storage), runs migrations and the de
 - Health: `GET http://localhost:4000/health`
 - OpenAPI docs: http://localhost:4000/docs
 - MinIO console: http://localhost:9001 (minio / minio12345). The bucket is private; clients only ever get presigned URLs.
+- Mailpit inbox: http://localhost:8025. Password reset and invite emails land here; set `SMTP_URL` to a real relay to deliver them.
 
 ### Testing on a phone or a physical player
 
@@ -23,19 +24,21 @@ Signed media URLs point at `S3_PUBLIC_ENDPOINT` (default `http://localhost:9000`
 S3_PUBLIC_ENDPOINT=http://192.168.1.20:9000 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Point the app or player at `http://192.168.1.20:4000` (REST and Socket.IO). The same variables can live in `docker/.env`, which Compose reads automatically. Add web origins to `CORS_ORIGINS` the same way if a browser on another machine needs access.
+Point the app or player at `http://192.168.1.20:4000` (REST and Socket.IO). Set `APP_PUBLIC_URL` too if emailed reset links should open on the phone. The same variables can live in `docker/.env`, which Compose reads automatically. Add web origins to `CORS_ORIGINS` the same way if a browser on another machine needs access.
 
 ## Local development
 
 ```bash
 npm install
 cp .env.example .env
-docker compose -f docker/docker-compose.yml up postgres redis minio minio-init -d
+docker compose -f docker/docker-compose.yml up postgres redis minio minio-init mailpit -d
 npm run prisma:migrate     # creates the database schema
 npm run seed               # loads demo data
 npm run dev                # API with reload on http://localhost:4000
-npm run dev:worker         # background jobs
+npm run dev:worker         # background jobs (also sends mail)
 ```
+
+With `SMTP_URL` empty, emails are written to the worker log instead of being sent. Set `SMTP_URL=smtp://localhost:1025` to see them in Mailpit.
 
 ## Tests
 
