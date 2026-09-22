@@ -94,6 +94,9 @@ describe("media access and deletion", () => {
     const blocked = await api().delete(`/api/v1/media/${asset.id}`).set(ctx.auth);
     expect(blocked.status).toBe(409);
     expect(blocked.body.error.code).toBe("MEDIA_IN_USE");
+    const notForced = await api().delete(`/api/v1/media/${asset.id}?force=false`).set(ctx.auth);
+    expect(notForced.status).toBe(409);
+    expect(notForced.body.error.code).toBe("MEDIA_IN_USE");
     const forced = await api().delete(`/api/v1/media/${asset.id}?force=true`).set(ctx.auth);
     expect(forced.status).toBe(204);
     expect(await prisma.playlistItem.count({ where: { playlistId: playlist.id } })).toBe(0);

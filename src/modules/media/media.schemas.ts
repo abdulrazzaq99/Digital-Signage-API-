@@ -15,7 +15,7 @@ export const uploadUrlBody = z.object({
 }).openapi("UploadUrlBody");
 export const finalizeBody = z.object({ checksum: z.string().max(128).optional(), width: z.number().int().positive().optional(), height: z.number().int().positive().optional(), durationSec: z.number().int().positive().optional(), pages: z.number().int().positive().optional() }).openapi("FinalizeUploadBody");
 export const updateMediaBody = z.object({ name: z.string().trim().min(1).max(200).optional(), tags: z.array(z.string().trim().min(1).max(40)).max(20).optional() }).openapi("UpdateMediaBody");
-export const deleteQuery = z.object({ force: z.coerce.boolean().default(false) });
+export const deleteQuery = z.object({ force: z.stringbool().default(false) });
 
 export const mediaDto = z.object({
   id: z.string(), name: z.string(), type: mediaType, status: mediaStatus, mimeType: z.string(), sizeBytes: z.number(), checksum: z.string().nullable(), width: z.number().nullable(), height: z.number().nullable(), durationSec: z.number().nullable(), pages: z.number().nullable(), tags: z.array(z.string()), failureReason: z.string().nullable(), uploadedBy: z.string().nullable(), createdAt: z.string(),

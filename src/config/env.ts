@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { z } from "zod";
 
-const schema = z.object({
+export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -22,15 +22,15 @@ const schema = z.object({
   S3_ACCESS_KEY: z.string().min(1),
   S3_SECRET_KEY: z.string().min(1),
   S3_PUBLIC_URL: z.string().url(),
-  S3_FORCE_PATH_STYLE: z.coerce.boolean().default(true),
+  S3_FORCE_PATH_STYLE: z.stringbool().default(true),
   ONESIGNAL_APP_ID: z.string().optional().transform((v) => v || undefined),
   ONESIGNAL_API_KEY: z.string().optional().transform((v) => v || undefined),
 });
 
-export type Env = z.infer<typeof schema>;
+export type Env = z.infer<typeof envSchema>;
 
 function load(): Env {
-  const result = schema.safeParse(process.env);
+  const result = envSchema.safeParse(process.env);
   if (!result.success) {
     const lines = result.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`);
     console.error(`Invalid environment configuration:\n${lines.join("\n")}`);

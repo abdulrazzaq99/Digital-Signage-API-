@@ -11,7 +11,7 @@ export const listScreensQuery = paginationQuery.extend({
   status: screenStatus.optional(),
   groupId: z.string().optional(),
   orientation: orientation.optional(),
-  personal: z.coerce.boolean().optional(),
+  personal: z.stringbool().optional(),
 });
 
 export const pairBody = z.object({

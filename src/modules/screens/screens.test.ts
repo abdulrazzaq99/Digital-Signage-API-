@@ -208,3 +208,17 @@ describe("player", () => {
     expect(res.body.error.code).toBe("DEVICE_UNAUTHORIZED");
   });
 });
+
+describe("list filters", () => {
+  it("treats personal=false as false, not as a truthy string", async () => {
+    const ctx = await customerContext();
+    await prisma.screen.create({ data: { companyId: ctx.company.id, name: "Shared", pairingStatus: "PAIRED" } });
+    await prisma.screen.create({ data: { companyId: ctx.company.id, name: "Mine", pairingStatus: "PAIRED", isPersonal: true } });
+    const shared = await api().get("/api/v1/screens?personal=false").set(ctx.auth);
+    expect(shared.body.data.map((s: { name: string }) => s.name)).toEqual(["Shared"]);
+    const personal = await api().get("/api/v1/screens?personal=true").set(ctx.auth);
+    expect(personal.body.data.map((s: { name: string }) => s.name)).toEqual(["Mine"]);
+    const invalid = await api().get("/api/v1/screens?personal=maybe").set(ctx.auth);
+    expect(invalid.status).toBe(400);
+  });
+});

@@ -173,7 +173,12 @@ describe("schedules", () => {
     expect(active3.body.data).toMatchObject({ source: "ASSIGNMENT", assignment: { kind: "PLAYLIST", refId: p2.id } });
 
     expect((await api().delete(`/api/v1/schedules/${screenSched.body.data.id}`).set(ctx.auth)).status).toBe(204);
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString();
+    const dayAfter = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    expect((await api().post("/api/v1/schedules").set(ctx.auth).set("Idempotency-Key", "s4").send({ playlistId: p2.id, targetKind: "SCREEN", targetId: screen.id, startsAt: tomorrow, endsAt: dayAfter })).status).toBe(201);
     const list = await api().get("/api/v1/schedules?activeOnly=true").set(ctx.auth);
     expect(list.body.data).toHaveLength(1);
+    const all = await api().get("/api/v1/schedules?activeOnly=false").set(ctx.auth);
+    expect(all.body.data).toHaveLength(2);
   });
 });
