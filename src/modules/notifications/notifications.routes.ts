@@ -10,5 +10,7 @@ export const notificationsRouter = Router();
 notificationsRouter.use(authenticate());
 notificationsRouter.get("/", authorize({ platformOnly: true }), validate({ query: listNotificationsQuery }), asyncHandler(c.list));
 notificationsRouter.post("/", authorize({ platformOnly: true }), validate({ body: createNotificationBody }), asyncHandler(c.create));
+notificationsRouter.get("/inbox", validate({ query: listNotificationsQuery }), asyncHandler(c.inbox));
+notificationsRouter.get("/:id", validate({ params: idParams }), asyncHandler(c.get));
 notificationsRouter.post("/subscriptions", validate({ body: subscribeBody }), asyncHandler(c.subscribe));
 notificationsRouter.delete("/subscriptions/:id", validate({ params: idParams }), asyncHandler(c.unsubscribe));

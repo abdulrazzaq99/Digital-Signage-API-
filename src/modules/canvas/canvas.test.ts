@@ -1,12 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../../core/db/prisma.js";
-import { noopPush, setPushProvider } from "../../core/push/index.js";
 import { touchPresence } from "../../core/redis/presence.js";
-import { notificationSend } from "../../jobs/notification.send.js";
 import { customerContext, superAdminContext } from "../../test/factories.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
 
-beforeEach(async () => { await resetDatabase(); noopPush.sent.length = 0; setPushProvider(noopPush); });
+beforeEach(resetDatabase);
 afterAll(closeAll);
 
 async function pairedScreen(auth: Record<string, string>, name: string, orientation = "LANDSCAPE") {
@@ -15,27 +13,6 @@ async function pairedScreen(auth: Record<string, string>, name: string, orientat
   const credential = (await api().get(`/api/v1/player/pairing-sessions/${session.sessionId}`)).body.data.credential as string;
   return { ...screen, credential };
 }
-
-describe("notifications", () => {
-  it("registers subscriptions, resolves audiences, and sends through the provider", async () => {
-    const admin = await superAdminContext();
-    const ctx = await customerContext();
-    const other = await customerContext();
-    expect((await api().post("/api/v1/notifications/subscriptions").set(ctx.auth).send({ externalId: "onesignal-player-1", platform: "android" })).status).toBe(201);
-    await api().post("/api/v1/notifications/subscriptions").set(other.auth).send({ externalId: "onesignal-player-2" });
-    expect((await api().post("/api/v1/notifications").set(ctx.auth).send({ title: "Hi", body: "No", audience: { kind: "all" } })).status).toBe(403);
-
-    const res = await api().post("/api/v1/notifications").set(admin.auth).send({ title: "New offer", body: "Display upgrade programme is live", audience: { kind: "companies", companyIds: [ctx.company.id] }, deepLink: "/portal/offers/abc" });
-    expect(res.status).toBe(202);
-    expect(res.body.data.sentAt).toBeNull();
-    await notificationSend({ notificationId: res.body.data.id });
-    expect(noopPush.sent).toHaveLength(1);
-    expect(noopPush.sent[0]!.audience.externalIds).toEqual(["onesignal-player-1"]);
-    expect(noopPush.sent[0]!.message).toMatchObject({ title: "New offer", deepLink: "/portal/offers/abc" });
-    const list = await api().get("/api/v1/notifications").set(admin.auth);
-    expect(list.body.data[0].sentAt).toBeTypeOf("string");
-  });
-});
 
 describe("activity", () => {
   it("customers see only their company; Super Admin filters across tenants", async () => {

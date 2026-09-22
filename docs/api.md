@@ -54,6 +54,14 @@ Login 10/min per IP · pairing 20/min per IP · pairing session polling 120/min 
 - `POST /users` without a `password` invites the user: they get an email with the same kind of link, valid for 7 days, to choose their first password. No temporary password is issued.
 - Both links are completed with `POST /auth/reset-password { token, password }` (204), which also signs out every existing session. The web app serves `/reset-password`; the mobile apps can claim the same URL as a Universal Link / App Link and read `token` from the query string.
 
+## Push notifications
+
+- Register the device after the OneSignal SDK subscribes: `POST /notifications/subscriptions { externalId, platform }`, where `externalId` is the OneSignal subscription ID (`OneSignal.User.pushSubscription.id`). Call it again whenever the ID changes; `DELETE /notifications/subscriptions/{id}` on sign-out.
+- Every push carries `data: { notificationId, type, targetId? }`. `type` is `announcement`, `offer` or `campaign`; `targetId` is the offer or campaign ID and is omitted for announcements.
+- Phones also get an OS deep link (OneSignal `app_url`): `dsp://offers/<id>`, `dsp://campaigns/<id>` or `dsp://notifications/<id>`. If the app routes from `data` in its click handler instead, suppress OneSignal's launch-URL handling so the link isn't opened twice. OneSignal `url`/`web_url` is only set for web push, from an `https://` `deepLink`.
+- The Super Admin sends with `POST /notifications { title, body, type, targetId, audience, deepLink?, scheduledAt? }`; `targetId` must be an existing offer or campaign (`TARGET_NOT_FOUND`).
+- `GET /notifications/inbox` lists sent notifications addressed to the caller (everyone, their company, or them), newest first. `GET /notifications/{id}` returns one, or 404 if the caller isn't in its audience.
+
 ## Pairing sequence
 
 1. Player: `POST /player/pairing-sessions { deviceId, model, playerVersion }` → `{ sessionId, code }` (code valid 5 minutes).

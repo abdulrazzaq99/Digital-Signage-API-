@@ -583,10 +583,20 @@ model OfferView {
 
 // ---------- Notifications ----------
 
+/// What a notification opens in the app; lowercase because it is the push payload contract (R1).
+enum NotificationType {
+  announcement
+  offer
+  campaign
+}
+
 model Notification {
   id         String    @id @default(cuid())
   title      String
   body       String
+  type       NotificationType @default(announcement)
+  /// Offer or campaign ID for `offer` / `campaign`; null for announcements.
+  targetId   String?
   audience   Json
   deepLink   String?
   scheduledAt DateTime?

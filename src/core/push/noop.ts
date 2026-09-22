@@ -9,6 +9,6 @@ export class NoopPushProvider implements PushProvider {
   async send(message: PushMessage, audience: PushAudience): Promise<PushSendResult> {
     this.sent.push({ message, audience });
     logger.info({ title: message.title, recipients: audience.externalIds.length }, "push (noop)");
-    return { providerId: `noop-${this.sent.length}`, recipients: audience.externalIds.length };
+    return { providerId: `noop-${this.sent.length}`, recipients: audience.externalIds.length, invalidIds: [] };
   }
 }
