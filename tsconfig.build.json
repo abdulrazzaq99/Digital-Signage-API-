@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "rootDir": ".", "outDir": "dist", "sourceMap": true },
-  "include": ["src", "prisma/seed.ts"],
+  "include": ["src", "prisma/seed.ts", "prisma/create-admin.ts"],
   "exclude": ["src/**/*.test.ts"]
 }
