@@ -19,8 +19,9 @@ export const envSchema = z.object({
   S3_PUBLIC_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().default("us-east-1"),
   S3_BUCKET: z.string().min(1),
-  S3_ACCESS_KEY: z.string().min(1),
-  S3_SECRET_KEY: z.string().min(1),
+  /** Both unset = the SDK's default chain (e.g. the EC2 instance role on AWS). */
+  S3_ACCESS_KEY: z.string().optional().transform((v) => v || undefined),
+  S3_SECRET_KEY: z.string().optional().transform((v) => v || undefined),
   S3_FORCE_PATH_STYLE: z.stringbool().default(true),
   ONESIGNAL_APP_ID: z.string().optional().transform((v) => v || undefined),
   ONESIGNAL_API_KEY: z.string().optional().transform((v) => v || undefined),

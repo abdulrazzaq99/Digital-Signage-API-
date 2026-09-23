@@ -5,7 +5,9 @@ import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { env } from "../../config/env.js";
 
-const credentials = { accessKeyId: env.S3_ACCESS_KEY, secretAccessKey: env.S3_SECRET_KEY };
+// Static keys for MinIO; without them the SDK falls back to its default chain (instance role on EC2).
+const credentials =
+  env.S3_ACCESS_KEY && env.S3_SECRET_KEY ? { accessKeyId: env.S3_ACCESS_KEY, secretAccessKey: env.S3_SECRET_KEY } : undefined;
 
 /** S3-compatible client for server-side operations (MinIO locally, any S3 bucket in production). */
 export const s3 = new S3Client({ region: env.S3_REGION, endpoint: env.S3_ENDPOINT, forcePathStyle: env.S3_FORCE_PATH_STYLE, credentials });

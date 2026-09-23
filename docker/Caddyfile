@@ -1,0 +1,5 @@
+# Terminates HTTPS (Let's Encrypt, automatic) and proxies REST and Socket.IO to the API.
+{$API_HOST} {
+	encode gzip
+	reverse_proxy api:4000
+}
