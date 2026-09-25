@@ -5,7 +5,9 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import argon2 from "argon2";
+import sharp from "sharp";
 import { PrismaClient } from "../src/generated/prisma/client.js";
+import { putObject } from "../src/core/storage/s3.js";
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? "" }) });
 
@@ -118,13 +120,15 @@ async function main(): Promise<void> {
     { key: "seed/lobby-welcome-slide.png", name: "Lobby_Welcome_Slide.png", type: "IMAGE", mime: "image/png", size: 900_000, status: "READY", width: 1920, height: 1080, tags: ["lobby"] },
   ] as const;
   const mediaIds: Record<string, string> = {};
-  for (const m of media) {
+  const palette = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0891b2", "#4f46e5", "#ca8a04"];
+  for (const [i, m] of media.entries()) {
     const row = await prisma.mediaAsset.upsert({
       where: { storageKey: m.key },
       update: { status: m.status },
       create: { companyId: acme, name: m.name, type: m.type, status: m.status, mimeType: m.mime, sizeBytes: BigInt(m.size), storageKey: m.key, width: "width" in m ? m.width : undefined, height: "height" in m ? m.height : undefined, durationSec: "duration" in m ? m.duration : undefined, pages: "pages" in m ? m.pages : undefined, tags: [...m.tags], failureReason: "failure" in m ? m.failure : undefined, uploadedById: sarah },
     });
     mediaIds[m.name] = row.id;
+    if (m.status === "READY") await storeSeedFiles(row.id, m.key, m.type, m.mime, palette[i % palette.length]!);
   }
 
   // ---- Playlists ----
@@ -219,6 +223,33 @@ async function main(): Promise<void> {
   }
 
   console.warn("Seed complete. Super Admin: admin@dsp.local / Admin123! · Customer: sarah.mitchell@acmecorp.com / Customer123!");
+}
+
+/**
+ * Demo media has no real files, so without this every thumbnail is a broken image. Uploads a
+ * gradient placeholder as the original (images) and a thumbnail (all types). Video and PDF
+ * originals stay absent: the build image has no ffmpeg, and players only need them when published.
+ */
+async function storeSeedFiles(assetId: string, key: string, type: string, mime: string, colour: string): Promise<void> {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="${colour}"/><stop offset="1" stop-color="#0f172a"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><circle cx="1500" cy="300" r="220" fill="#ffffff" fill-opacity="0.12"/><rect x="160" y="700" width="900" height="60" rx="30" fill="#ffffff" fill-opacity="0.25"/></svg>`;
+  const slide = sharp(Buffer.from(svg));
+  const thumbKey = `seed/derived/${key.slice(key.lastIndexOf("/") + 1)}.thumb.webp`;
+  try {
+    if (type === "IMAGE") {
+      const original = await (mime === "image/png" ? slide.clone().png() : slide.clone().jpeg({ quality: 85 })).toBuffer();
+      await putObject(key, original, mime);
+      await prisma.mediaAsset.update({ where: { id: assetId }, data: { sizeBytes: BigInt(original.length) } });
+    }
+    const thumb = await slide.clone().resize(480, 270).webp({ quality: 80 }).toBuffer();
+    await putObject(thumbKey, thumb, "image/webp");
+    await prisma.mediaDerivative.upsert({
+      where: { storageKey: thumbKey },
+      update: { sizeBytes: thumb.length },
+      create: { assetId, kind: "THUMBNAIL", storageKey: thumbKey, width: 480, height: 270, mimeType: "image/webp", sizeBytes: thumb.length },
+    });
+  } catch (err) {
+    console.warn(`Could not store demo files for ${key} (is storage reachable?): ${err instanceof Error ? err.message : err}`);
+  }
 }
 
 main()

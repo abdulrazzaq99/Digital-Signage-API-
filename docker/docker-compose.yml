@@ -87,6 +87,8 @@ services:
     environment: *api-env
     depends_on:
       postgres: { condition: service_healthy }
+      # The seed uploads demo thumbnails, so the bucket must exist first.
+      minio-init: { condition: service_completed_successfully }
     command: ["/bin/sh", "-c", "npx prisma migrate deploy && node dist/prisma/seed.js"]
     restart: "no"
 
