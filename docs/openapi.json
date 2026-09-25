@@ -77,6 +77,10 @@
           "phone": {
             "type": "string",
             "nullable": true
+          },
+          "readOnlyReason": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -87,7 +91,8 @@
           "companyRole",
           "companyId",
           "title",
-          "phone"
+          "phone",
+          "readOnlyReason"
         ]
       },
       "ErrorEnvelope": {
@@ -124,11 +129,12 @@
         "properties": {
           "email": {
             "type": "string",
-            "format": "email"
+            "maxLength": 254
           },
           "password": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 128
           }
         },
         "required": [
@@ -141,7 +147,9 @@
         "properties": {
           "refreshToken": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^\\S+$"
           }
         },
         "required": [
@@ -153,7 +161,7 @@
         "properties": {
           "email": {
             "type": "string",
-            "format": "email"
+            "maxLength": 254
           }
         },
         "required": [
@@ -165,12 +173,15 @@
         "properties": {
           "token": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^\\S+$"
           },
           "password": {
             "type": "string",
             "minLength": 8,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "[A-Za-z]"
           }
         },
         "required": [
@@ -183,12 +194,14 @@
         "properties": {
           "currentPassword": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 128
           },
           "newPassword": {
             "type": "string",
             "minLength": 8,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "[A-Za-z]"
           }
         },
         "required": [
@@ -324,25 +337,40 @@
             "default": "ACTIVE"
           },
           "website": {
-            "type": "string",
-            "format": "uri"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "type": "string",
+                "maxLength": 300
+              }
+            ]
           },
           "industry": {
             "type": "string",
             "maxLength": 80
           },
           "phone": {
-            "type": "string",
-            "maxLength": 40
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "type": "string",
+                "maxLength": 40
+              }
+            ]
           },
           "timezone": {
             "type": "string",
-            "maxLength": 64,
             "default": "UTC"
           },
           "plan": {
             "type": "string",
-            "maxLength": 60
+            "maxLength": 80
           },
           "screenLimit": {
             "type": "integer",
@@ -382,9 +410,19 @@
             ]
           },
           "website": {
-            "type": "string",
-            "nullable": true,
-            "format": "uri"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "string",
+                "maxLength": 300
+              }
+            ]
           },
           "industry": {
             "type": "string",
@@ -392,18 +430,27 @@
             "maxLength": 80
           },
           "phone": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 40
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "string",
+                "maxLength": 40
+              }
+            ]
           },
           "timezone": {
-            "type": "string",
-            "maxLength": 64
+            "type": "string"
           },
           "plan": {
             "type": "string",
             "nullable": true,
-            "maxLength": 60
+            "maxLength": 80
           }
         }
       },
@@ -540,8 +587,7 @@
         "properties": {
           "email": {
             "type": "string",
-            "maxLength": 160,
-            "format": "email"
+            "maxLength": 254
           },
           "name": {
             "type": "string",
@@ -557,17 +603,34 @@
             ]
           },
           "password": {
-            "type": "string",
-            "minLength": 8,
-            "maxLength": 128
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "type": "string",
+                "minLength": 8,
+                "maxLength": 128,
+                "pattern": "[A-Za-z]"
+              }
+            ]
           },
           "title": {
             "type": "string",
             "maxLength": 80
           },
           "phone": {
-            "type": "string",
-            "maxLength": 40
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "type": "string",
+                "maxLength": 40
+              }
+            ]
           }
         },
         "required": [
@@ -598,9 +661,19 @@
             "maxLength": 80
           },
           "phone": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 40
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "string",
+                "maxLength": 40
+              }
+            ]
           },
           "isActive": {
             "type": "boolean"
@@ -621,9 +694,19 @@
             "maxLength": 80
           },
           "phone": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 40
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "string",
+                "maxLength": 40
+              }
+            ]
           }
         }
       },
@@ -802,7 +885,8 @@
           "code": {
             "type": "string",
             "minLength": 4,
-            "maxLength": 12
+            "maxLength": 12,
+            "pattern": "^[A-Za-z0-9]+$"
           },
           "name": {
             "type": "string",
@@ -822,7 +906,16 @@
             "default": "LANDSCAPE"
           },
           "groupId": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "type": "string",
+                "pattern": "^c[a-z0-9]{20,31}$"
+              }
+            ]
           },
           "tags": {
             "type": "array",
@@ -831,6 +924,7 @@
               "minLength": 1,
               "maxLength": 40
             },
+            "minItems": 0,
             "maxItems": 20,
             "default": []
           }
@@ -867,11 +961,23 @@
               "minLength": 1,
               "maxLength": 40
             },
+            "minItems": 0,
             "maxItems": 20
           },
           "groupId": {
-            "type": "string",
-            "nullable": true
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "string",
+                "pattern": "^c[a-z0-9]{20,31}$"
+              }
+            ]
           }
         }
       },
@@ -944,8 +1050,11 @@
           "screenIds": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
+            "minItems": 0,
+            "maxItems": 500,
             "default": []
           }
         },
@@ -969,8 +1078,11 @@
           "screenIds": {
             "type": "array",
             "items": {
-              "type": "string"
-            }
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
+            },
+            "minItems": 0,
+            "maxItems": 500
           }
         }
       },
@@ -1338,24 +1450,47 @@
             "maxLength": 40
           },
           "ip": {
-            "type": "string",
-            "maxLength": 64
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "type": "string",
+                "format": "ip"
+              },
+              {
+                "type": "string",
+                "format": "ip"
+              }
+            ]
           },
           "resolution": {
-            "type": "string",
-            "maxLength": 20
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "type": "string",
+                "pattern": "^\\d{2,5}x\\d{2,5}$"
+              }
+            ]
           },
           "storageFree": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 9007199254740992
           },
           "storageTotal": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 9007199254740992
           },
           "currentVersion": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 2147483648
           },
           "state": {
             "type": "string",
@@ -1374,7 +1509,8 @@
         "properties": {
           "version": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 2147483648
           },
           "status": {
             "type": "string",
@@ -1408,6 +1544,7 @@
           },
           "event": {
             "type": "string",
+            "minLength": 1,
             "maxLength": 80
           },
           "detail": {
@@ -1578,8 +1715,7 @@
           },
           "sizeBytes": {
             "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true,
+            "minimum": 1,
             "maximum": 524288000
           },
           "tags": {
@@ -1589,6 +1725,7 @@
               "minLength": 1,
               "maxLength": 40
             },
+            "minItems": 0,
             "maxItems": 20,
             "default": []
           }
@@ -1608,23 +1745,23 @@
           },
           "width": {
             "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true
+            "minimum": 1,
+            "maximum": 16384
           },
           "height": {
             "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true
+            "minimum": 1,
+            "maximum": 16384
           },
           "durationSec": {
             "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true
+            "minimum": 1,
+            "maximum": 86400
           },
           "pages": {
             "type": "integer",
-            "minimum": 0,
-            "exclusiveMinimum": true
+            "minimum": 1,
+            "maximum": 2000
           }
         }
       },
@@ -1643,6 +1780,7 @@
               "minLength": 1,
               "maxLength": 40
             },
+            "minItems": 0,
             "maxItems": 20
           }
         }
@@ -1778,24 +1916,28 @@
               "type": "object",
               "properties": {
                 "assetId": {
-                  "type": "string"
+                  "type": "string",
+                  "pattern": "^c[a-z0-9]{20,31}$"
                 },
                 "durationSec": {
                   "type": "integer",
                   "minimum": 1,
-                  "maximum": 3600
+                  "maximum": 86400
                 },
                 "page": {
                   "type": "integer",
-                  "minimum": 1
+                  "minimum": 1,
+                  "maximum": 2000
                 }
               },
               "required": [
                 "assetId",
                 "durationSec"
-              ]
+              ],
+              "additionalProperties": false
             },
-            "maxItems": 200,
+            "minItems": 0,
+            "maxItems": 500,
             "default": []
           }
         },
@@ -1817,24 +1959,28 @@
               "type": "object",
               "properties": {
                 "assetId": {
-                  "type": "string"
+                  "type": "string",
+                  "pattern": "^c[a-z0-9]{20,31}$"
                 },
                 "durationSec": {
                   "type": "integer",
                   "minimum": 1,
-                  "maximum": 3600
+                  "maximum": 86400
                 },
                 "page": {
                   "type": "integer",
-                  "minimum": 1
+                  "minimum": 1,
+                  "maximum": 2000
                 }
               },
               "required": [
                 "assetId",
                 "durationSec"
-              ]
+              ],
+              "additionalProperties": false
             },
-            "maxItems": 200
+            "minItems": 0,
+            "maxItems": 500
           }
         }
       },
@@ -1842,20 +1988,23 @@
         "type": "object",
         "properties": {
           "assetId": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^c[a-z0-9]{20,31}$"
           },
           "durationSec": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 3600
+            "maximum": 86400
           },
           "page": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 2000
           },
           "position": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 10000
           }
         },
         "required": [
@@ -1868,7 +2017,7 @@
           "durationSec": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 3600
+            "maximum": 86400
           }
         },
         "required": [
@@ -1881,9 +2030,11 @@
           "itemIds": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
-            "minItems": 1
+            "minItems": 1,
+            "maxItems": 1000
           }
         },
         "required": [
@@ -1934,15 +2085,21 @@
           "screenIds": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
+            "minItems": 0,
+            "maxItems": 500,
             "default": []
           },
           "groupIds": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
+            "minItems": 0,
+            "maxItems": 500,
             "default": []
           }
         }
@@ -2021,7 +2178,7 @@
         "properties": {
           "playlistId": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^c[a-z0-9]{20,31}$"
           },
           "targetKind": {
             "type": "string",
@@ -2032,7 +2189,7 @@
           },
           "targetId": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^c[a-z0-9]{20,31}$"
           },
           "startsAt": {
             "type": "string",
@@ -2045,8 +2202,6 @@
           },
           "timezone": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 64,
             "default": "UTC"
           }
         },
@@ -2097,7 +2252,7 @@
         "properties": {
           "playlistId": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^c[a-z0-9]{20,31}$"
           },
           "targetKind": {
             "type": "string",
@@ -2108,10 +2263,11 @@
           },
           "targetId": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^c[a-z0-9]{20,31}$"
           },
           "startsAt": {
             "type": "string",
+            "nullable": true,
             "format": "date-time"
           },
           "endsAt": {
@@ -2121,8 +2277,6 @@
           },
           "timezone": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 64,
             "default": "UTC"
           }
         },
@@ -2186,10 +2340,11 @@
         "properties": {
           "playlistId": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^c[a-z0-9]{20,31}$"
           },
           "startsAt": {
             "type": "string",
+            "nullable": true,
             "format": "date-time"
           },
           "endsAt": {
@@ -2198,10 +2353,7 @@
             "format": "date-time"
           },
           "timezone": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64,
-            "default": "UTC"
+            "type": "string"
           }
         }
       },
@@ -2301,7 +2453,8 @@
         "properties": {
           "presetId": {
             "type": "string",
-            "minLength": 1
+            "maxLength": 60,
+            "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"
           },
           "name": {
             "type": "string",
@@ -2326,7 +2479,7 @@
           },
           "refId": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^c[a-z0-9]{20,31}$"
           }
         },
         "required": [
@@ -2501,8 +2654,8 @@
               "properties": {
                 "key": {
                   "type": "string",
-                  "minLength": 1,
-                  "maxLength": 40
+                  "maxLength": 40,
+                  "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"
                 },
                 "label": {
                   "type": "string",
@@ -2523,8 +2676,8 @@
                 },
                 "max": {
                   "type": "integer",
-                  "minimum": 0,
-                  "exclusiveMinimum": true
+                  "minimum": 1,
+                  "maximum": 2000
                 },
                 "box": {
                   "type": "object",
@@ -2555,7 +2708,8 @@
                     "y",
                     "w",
                     "h"
-                  ]
+                  ],
+                  "additionalProperties": false
                 },
                 "fontSize": {
                   "type": "number",
@@ -2580,7 +2734,7 @@
                 },
                 "color": {
                   "type": "string",
-                  "pattern": "^#[0-9a-fA-F]{6}$"
+                  "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
                 },
                 "fit": {
                   "type": "string",
@@ -2594,7 +2748,8 @@
                 "key",
                 "label",
                 "type"
-              ]
+              ],
+              "additionalProperties": false
             },
             "minItems": 1,
             "maxItems": 20
@@ -2662,7 +2817,7 @@
         "properties": {
           "templateId": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^c[a-z0-9]{20,31}$"
           },
           "name": {
             "type": "string",
@@ -2672,7 +2827,8 @@
           "values": {
             "type": "object",
             "additionalProperties": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 2000
             }
           }
         },
@@ -2693,7 +2849,8 @@
           "values": {
             "type": "object",
             "additionalProperties": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 2000
             }
           }
         }
@@ -2840,8 +2997,17 @@
           },
           "category": {
             "type": "string",
-            "minLength": 2,
-            "maxLength": 60
+            "enum": [
+              "Hardware",
+              "Software",
+              "Services",
+              "Support",
+              "Retail & Shopping",
+              "Food & Beverage",
+              "Travel & Hospitality",
+              "Technology",
+              "Health & Wellness"
+            ]
           },
           "summary": {
             "type": "string",
@@ -2863,6 +3029,7 @@
             "properties": {
               "name": {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 120
               },
               "role": {
@@ -2870,12 +3037,28 @@
                 "maxLength": 80
               },
               "email": {
-                "type": "string",
-                "format": "email"
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\s*$"
+                  },
+                  {
+                    "type": "string",
+                    "maxLength": 254
+                  }
+                ]
               },
               "phone": {
-                "type": "string",
-                "maxLength": 40
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\s*$"
+                  },
+                  {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                ]
               },
               "hours": {
                 "type": "string",
@@ -2884,24 +3067,29 @@
             },
             "required": [
               "name"
-            ]
+            ],
+            "additionalProperties": false
           },
           "included": {
             "type": "array",
             "items": {
               "type": "string",
-              "maxLength": 120
+              "minLength": 1,
+              "maxLength": 200
             },
-            "maxItems": 20,
+            "minItems": 0,
+            "maxItems": 50,
             "default": []
           },
           "steps": {
             "type": "array",
             "items": {
               "type": "string",
-              "maxLength": 300
+              "minLength": 1,
+              "maxLength": 200
             },
-            "maxItems": 20,
+            "minItems": 0,
+            "maxItems": 50,
             "default": []
           },
           "imageKey": {
@@ -2938,8 +3126,17 @@
           },
           "category": {
             "type": "string",
-            "minLength": 2,
-            "maxLength": 60
+            "enum": [
+              "Hardware",
+              "Software",
+              "Services",
+              "Support",
+              "Retail & Shopping",
+              "Food & Beverage",
+              "Travel & Hospitality",
+              "Technology",
+              "Health & Wellness"
+            ]
           },
           "summary": {
             "type": "string",
@@ -2961,6 +3158,7 @@
             "properties": {
               "name": {
                 "type": "string",
+                "minLength": 1,
                 "maxLength": 120
               },
               "role": {
@@ -2968,12 +3166,28 @@
                 "maxLength": 80
               },
               "email": {
-                "type": "string",
-                "format": "email"
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\s*$"
+                  },
+                  {
+                    "type": "string",
+                    "maxLength": 254
+                  }
+                ]
               },
               "phone": {
-                "type": "string",
-                "maxLength": 40
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\s*$"
+                  },
+                  {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                ]
               },
               "hours": {
                 "type": "string",
@@ -2982,25 +3196,28 @@
             },
             "required": [
               "name"
-            ]
+            ],
+            "additionalProperties": false
           },
           "included": {
             "type": "array",
             "items": {
               "type": "string",
-              "maxLength": 120
+              "minLength": 1,
+              "maxLength": 200
             },
-            "maxItems": 20,
-            "default": []
+            "minItems": 0,
+            "maxItems": 50
           },
           "steps": {
             "type": "array",
             "items": {
               "type": "string",
-              "maxLength": 300
+              "minLength": 1,
+              "maxLength": 200
             },
-            "maxItems": 20,
-            "default": []
+            "minItems": 0,
+            "maxItems": 50
           },
           "imageKey": {
             "type": "string",
@@ -3141,6 +3358,7 @@
           },
           "endsAt": {
             "type": "string",
+            "nullable": true,
             "format": "date-time"
           },
           "maxAttempts": {
@@ -3156,7 +3374,7 @@
           "loseWeight": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 10000,
+            "maximum": 1000000,
             "default": 50
           },
           "artworkKey": {
@@ -3184,12 +3402,12 @@
                 "quantity": {
                   "type": "integer",
                   "minimum": 1,
-                  "maximum": 100000
+                  "maximum": 1000000
                 },
                 "weight": {
                   "type": "integer",
                   "minimum": 1,
-                  "maximum": 10000,
+                  "maximum": 1000000,
                   "default": 1
                 }
               },
@@ -3224,10 +3442,12 @@
           },
           "startsAt": {
             "type": "string",
+            "nullable": true,
             "format": "date-time"
           },
           "endsAt": {
             "type": "string",
+            "nullable": true,
             "format": "date-time"
           },
           "maxAttempts": {
@@ -3241,7 +3461,7 @@
           "loseWeight": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 10000
+            "maximum": 1000000
           },
           "artworkKey": {
             "type": "string",
@@ -3265,12 +3485,12 @@
           "quantity": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100000
+            "maximum": 1000000
           },
           "weight": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 10000,
+            "maximum": 1000000,
             "default": 1
           }
         },
@@ -3689,8 +3909,7 @@
           },
           "targetId": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 64
+            "pattern": "^c[a-z0-9]{20,31}$"
           },
           "audience": {
             "anyOf": [
@@ -3706,7 +3925,8 @@
                 },
                 "required": [
                   "kind"
-                ]
+                ],
+                "additionalProperties": false
               },
               {
                 "type": "object",
@@ -3720,15 +3940,18 @@
                   "companyIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
                     },
-                    "minItems": 1
+                    "minItems": 1,
+                    "maxItems": 1000
                   }
                 },
                 "required": [
                   "kind",
                   "companyIds"
-                ]
+                ],
+                "additionalProperties": false
               },
               {
                 "type": "object",
@@ -3742,21 +3965,32 @@
                   "userIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
                     },
-                    "minItems": 1
+                    "minItems": 1,
+                    "maxItems": 1000
                   }
                 },
                 "required": [
                   "kind",
                   "userIds"
-                ]
+                ],
+                "additionalProperties": false
               }
             ]
           },
           "deepLink": {
-            "type": "string",
-            "maxLength": 300
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\s*$"
+              },
+              {
+                "type": "string",
+                "maxLength": 500
+              }
+            ]
           },
           "scheduledAt": {
             "type": "string",
@@ -3985,7 +4219,8 @@
           "screenIds": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "minItems": 2,
             "maxItems": 16
@@ -4007,7 +4242,8 @@
           "screenIds": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "minItems": 2,
             "maxItems": 16
@@ -4026,13 +4262,14 @@
               },
               "refId": {
                 "type": "string",
-                "minLength": 1
+                "pattern": "^c[a-z0-9]{20,31}$"
               }
             },
             "required": [
               "kind",
               "refId"
-            ]
+            ],
+            "additionalProperties": false
           }
         }
       }
@@ -4332,6 +4569,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -4473,7 +4711,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -4530,7 +4768,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -4587,7 +4825,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -4615,7 +4853,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -4705,7 +4943,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "companyId",
@@ -4762,7 +5000,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "companyId",
@@ -4822,6 +5060,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -4950,7 +5189,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -5017,7 +5256,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -5094,6 +5333,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -5135,7 +5375,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": false,
             "name": "groupId",
@@ -5285,7 +5526,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -5342,7 +5583,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -5401,7 +5642,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -5429,7 +5670,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -5554,7 +5795,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -5601,7 +5842,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -5658,7 +5899,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -5750,7 +5991,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "sessionId",
@@ -5982,6 +6223,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -6141,7 +6383,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6210,7 +6452,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6279,7 +6521,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6336,7 +6578,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6393,7 +6635,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6440,7 +6682,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6501,7 +6743,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6551,6 +6793,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -6681,7 +6924,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6738,7 +6981,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6795,7 +7038,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6833,7 +7076,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6882,7 +7125,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6941,7 +7184,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -6950,7 +7193,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "itemId",
@@ -7007,7 +7250,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -7016,7 +7259,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "itemId",
@@ -7065,7 +7308,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -7134,7 +7377,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -7222,6 +7465,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -7253,7 +7497,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": false,
             "name": "targetId",
@@ -7261,7 +7506,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": false,
             "name": "playlistId",
@@ -7436,7 +7682,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "screenId",
@@ -7445,6 +7691,7 @@
           {
             "schema": {
               "type": "string",
+              "nullable": true,
               "format": "date-time"
             },
             "required": false,
@@ -7494,7 +7741,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -7551,7 +7798,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -7707,7 +7954,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -7764,7 +8011,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -7792,7 +8039,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -7802,7 +8049,8 @@
             "schema": {
               "type": "integer",
               "nullable": true,
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 31
             },
             "required": false,
             "name": "index",
@@ -7859,7 +8107,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -7869,7 +8117,8 @@
             "schema": {
               "type": "integer",
               "nullable": true,
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 31
             },
             "required": false,
             "name": "index",
@@ -7918,7 +8167,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8092,7 +8341,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8217,7 +8466,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8264,7 +8513,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8321,7 +8570,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8349,7 +8598,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8398,7 +8647,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8466,6 +8715,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -8509,7 +8759,17 @@
           {
             "schema": {
               "type": "string",
-              "maxLength": 60
+              "enum": [
+                "Hardware",
+                "Software",
+                "Services",
+                "Support",
+                "Retail & Shopping",
+                "Food & Beverage",
+                "Travel & Hospitality",
+                "Technology",
+                "Health & Wellness"
+              ]
             },
             "required": false,
             "name": "category",
@@ -8617,7 +8877,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8674,7 +8934,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8731,7 +8991,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8759,7 +9019,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8808,7 +9068,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8857,7 +9117,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8885,7 +9145,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -8972,6 +9232,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -9105,7 +9366,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -9162,7 +9423,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -9221,7 +9482,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -9270,7 +9531,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -9319,7 +9580,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -9378,7 +9639,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -9387,7 +9648,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "prizeId",
@@ -9436,7 +9697,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -9485,7 +9746,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -9563,6 +9824,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -9582,7 +9844,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": false,
             "name": "campaignId",
@@ -9590,7 +9853,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": false,
             "name": "companyId",
@@ -9663,7 +9927,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -9713,6 +9977,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -9834,6 +10099,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -9898,7 +10164,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -10017,7 +10283,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -10046,6 +10312,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 100000,
               "default": 1
             },
             "required": false,
@@ -10066,7 +10333,8 @@
           {
             "schema": {
               "type": "string",
-              "maxLength": 80
+              "maxLength": 80,
+              "pattern": "^[a-z_.]*$"
             },
             "required": false,
             "name": "action",
@@ -10075,7 +10343,24 @@
           {
             "schema": {
               "type": "string",
-              "maxLength": 40
+              "enum": [
+                "campaign",
+                "canvas",
+                "company",
+                "layout",
+                "license",
+                "media",
+                "notification",
+                "offer",
+                "playlist",
+                "schedule",
+                "screen",
+                "screen_group",
+                "template",
+                "template_instance",
+                "user",
+                "winner"
+              ]
             },
             "required": false,
             "name": "resourceType",
@@ -10096,7 +10381,8 @@
           },
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": false,
             "name": "companyId",
@@ -10105,6 +10391,7 @@
           {
             "schema": {
               "type": "string",
+              "nullable": true,
               "format": "date-time"
             },
             "required": false,
@@ -10114,6 +10401,7 @@
           {
             "schema": {
               "type": "string",
+              "nullable": true,
               "format": "date-time"
             },
             "required": false,
@@ -10272,7 +10560,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -10319,7 +10607,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -10376,7 +10664,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -10404,7 +10692,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
@@ -10471,7 +10759,7 @@
           {
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^c[a-z0-9]{20,31}$"
             },
             "required": true,
             "name": "id",
