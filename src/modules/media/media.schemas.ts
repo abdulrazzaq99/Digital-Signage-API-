@@ -3,19 +3,20 @@ import { queryFlag } from "../../core/http/query.js";
 import { ALLOWED_MIME, MAX_UPLOAD_BYTES } from "../../config/constants.js";
 import { paginationQuery } from "../../core/http/pagination.js";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
+import { id, int, optionalText, tags, text } from "../../core/validation/fields.js";
 
 export const mediaType = z.enum(["IMAGE", "VIDEO", "PDF"]);
 export const mediaStatus = z.enum(["UPLOADING", "PROCESSING", "READY", "FAILED"]);
-export const idParams = z.object({ id: z.string().min(1) });
-export const listMediaQuery = paginationQuery.extend({ search: z.string().trim().max(100).optional(), type: mediaType.optional(), status: mediaStatus.optional() });
+export const idParams = z.object({ id: id() });
+export const listMediaQuery = paginationQuery.extend({ search: optionalText(100), type: mediaType.optional(), status: mediaStatus.optional() });
 export const uploadUrlBody = z.object({
-  fileName: z.string().trim().min(1).max(200),
+  fileName: text(200),
   contentType: z.enum(Object.keys(ALLOWED_MIME) as [keyof typeof ALLOWED_MIME, ...(keyof typeof ALLOWED_MIME)[]]),
-  sizeBytes: z.number().int().positive().max(MAX_UPLOAD_BYTES),
-  tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+  sizeBytes: int(1, MAX_UPLOAD_BYTES),
+  tags: tags().default([]),
 }).openapi("UploadUrlBody");
-export const finalizeBody = z.object({ checksum: z.string().max(128).optional(), width: z.number().int().positive().optional(), height: z.number().int().positive().optional(), durationSec: z.number().int().positive().optional(), pages: z.number().int().positive().optional() }).openapi("FinalizeUploadBody");
-export const updateMediaBody = z.object({ name: z.string().trim().min(1).max(200).optional(), tags: z.array(z.string().trim().min(1).max(40)).max(20).optional() }).openapi("UpdateMediaBody");
+export const finalizeBody = z.object({ checksum: optionalText(128), width: int(1, 16_384).optional(), height: int(1, 16_384).optional(), durationSec: int(1, 86_400).optional(), pages: int(1, 2000).optional() }).openapi("FinalizeUploadBody");
+export const updateMediaBody = z.object({ name: text(200).optional(), tags: tags().optional() }).openapi("UpdateMediaBody");
 export const deleteQuery = z.object({ force: queryFlag(false) });
 
 export const mediaDto = z.object({

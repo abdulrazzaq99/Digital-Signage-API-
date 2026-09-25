@@ -2,15 +2,23 @@ import { z } from "zod";
 import { queryFlag } from "../../core/http/query.js";
 import { paginationQuery } from "../../core/http/pagination.js";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
+import { dateTime, endAfterStart, id, notInPast, timezone } from "../../core/validation/fields.js";
 
-export const idParams = z.object({ id: z.string().min(1) });
+export const idParams = z.object({ id: id() });
 export const targetKind = z.enum(["SCREEN", "GROUP"]);
-export const listSchedulesQuery = paginationQuery.extend({ targetKind: targetKind.optional(), targetId: z.string().optional(), playlistId: z.string().optional(), activeOnly: queryFlag(false) });
-export const activeQuery = z.object({ screenId: z.string().min(1), at: z.string().datetime().optional() });
-const base = { playlistId: z.string().min(1), targetKind, targetId: z.string().min(1), startsAt: z.string().datetime(), endsAt: z.string().datetime().nullable().optional(), timezone: z.string().min(1).max(64).default("UTC") };
-export const createScheduleBody = z.object(base).refine((b) => !b.endsAt || new Date(b.endsAt) > new Date(b.startsAt), { message: "endsAt must be after startsAt", path: ["endsAt"] }).openapi("CreateScheduleBody");
-export const updateScheduleBody = z.object({ playlistId: base.playlistId.optional(), startsAt: base.startsAt.optional(), endsAt: base.endsAt, timezone: base.timezone.optional() }).openapi("UpdateScheduleBody");
-export const checkConflictsBody = z.object(base).openapi("CheckConflictsBody");
+export const listSchedulesQuery = paginationQuery.extend({ targetKind: targetKind.optional(), targetId: id().optional(), playlistId: id().optional(), activeOnly: queryFlag(false) });
+export const activeQuery = z.object({ screenId: id(), at: dateTime().optional() });
+const base = { playlistId: id(), targetKind, targetId: id(), startsAt: dateTime(), endsAt: dateTime().nullable().optional(), timezone: timezone().default("UTC") };
+export const createScheduleBody = z
+  .object({ ...base, startsAt: dateTime().refine(notInPast, "The start can't be in the past") })
+  .superRefine(endAfterStart("startsAt", "endsAt"))
+  .openapi("CreateScheduleBody");
+/** Only the fields sent change; the service re-checks the window against the stored dates. */
+export const updateScheduleBody = z
+  .object({ playlistId: id().optional(), startsAt: dateTime().optional(), endsAt: dateTime().nullable().optional(), timezone: timezone().optional() })
+  .superRefine(endAfterStart("startsAt", "endsAt"))
+  .openapi("UpdateScheduleBody");
+export const checkConflictsBody = z.object(base).superRefine(endAfterStart("startsAt", "endsAt")).openapi("CheckConflictsBody");
 
 export const scheduleDto = z.object({ id: z.string(), playlist: z.object({ id: z.string(), name: z.string() }), targetKind, targetId: z.string(), targetName: z.string(), startsAt: z.string(), endsAt: z.string().nullable(), timezone: z.string(), status: z.enum(["UPCOMING", "ACTIVE", "EXPIRED"]), createdAt: z.string() }).openapi("Schedule");
 export const conflictDto = z.object({ conflicts: z.array(z.object({ scheduleId: z.string(), playlistName: z.string(), startsAt: z.string(), endsAt: z.string().nullable() })) }).openapi("ScheduleConflicts");

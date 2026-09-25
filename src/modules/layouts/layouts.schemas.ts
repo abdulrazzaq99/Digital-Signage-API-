@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
+import { id, slug, text } from "../../core/validation/fields.js";
 import { publishBody, publishResultDto } from "../playlists/playlists.schemas.js";
 
-export const idParams = z.object({ id: z.string().min(1) });
-export const zoneParams = z.object({ id: z.string().min(1), index: z.coerce.number().int().min(0) });
-export const createLayoutBody = z.object({ presetId: z.string().min(1), name: z.string().trim().min(1).max(120) }).openapi("CreateLayoutBody");
-export const bindZoneBody = z.object({ bindingKind: z.enum(["MEDIA", "PLAYLIST"]), refId: z.string().min(1) }).openapi("BindZoneBody");
+export const idParams = z.object({ id: id() });
+export const zoneParams = z.object({ id: id(), index: z.coerce.number().int().min(0).max(31) });
+/** Presets are built in and keyed by slug (e.g. `main-bottom-bar`), not by database id. */
+export const createLayoutBody = z.object({ presetId: slug(60), name: text(120) }).openapi("CreateLayoutBody");
+export const bindZoneBody = z.object({ bindingKind: z.enum(["MEDIA", "PLAYLIST"]), refId: id() }).openapi("BindZoneBody");
+
 export const zoneDto = z.object({ index: z.number(), name: z.string(), x: z.number(), y: z.number(), w: z.number(), h: z.number(), bindingKind: z.string().nullable(), binding: z.object({ id: z.string(), name: z.string() }).nullable() }).openapi("LayoutZone");
 export const layoutDto = z.object({ id: z.string(), presetId: z.string(), name: z.string(), isPreset: z.boolean(), zones: z.array(zoneDto), ready: z.boolean(), createdAt: z.string() }).openapi("Layout");
 export { publishBody, publishResultDto };

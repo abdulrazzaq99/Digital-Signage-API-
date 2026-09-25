@@ -1,31 +1,33 @@
 import { z } from "zod";
 import { paginationQuery } from "../../core/http/pagination.js";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
+import { clearableField, clearableText, id, int, optionalField, optionalText, phone, text, timezone, url } from "../../core/validation/fields.js";
 
 export const companyStatus = z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]);
 export const licenseState = z.enum(["ACTIVE", "SUSPENDED", "DISABLED", "EXPIRED"]);
 
-export const listCompaniesQuery = paginationQuery.extend({ search: z.string().trim().max(100).optional(), status: companyStatus.optional() });
-export const companyIdParams = z.object({ id: z.string().min(1) });
+export const listCompaniesQuery = paginationQuery.extend({ search: optionalText(100), status: companyStatus.optional() });
+export const companyIdParams = z.object({ id: id() });
 export const createCompanyBody = z.object({
-  name: z.string().trim().min(2).max(120),
+  name: text(120, 2),
   status: companyStatus.default("ACTIVE"),
-  website: z.string().url().optional(),
-  industry: z.string().max(80).optional(),
-  phone: z.string().max(40).optional(),
-  timezone: z.string().max(64).default("UTC"),
-  plan: z.string().max(60).optional(),
-  screenLimit: z.number().int().min(1).max(10_000),
+  website: optionalField(url(300)),
+  industry: optionalText(80),
+  phone: optionalField(phone()),
+  timezone: timezone().default("UTC"),
+  plan: optionalText(80),
+  screenLimit: int(1, 10_000),
   licenseState: licenseState.default("ACTIVE"),
 }).openapi("CreateCompanyBody");
+/** Blank or null clears website, industry, phone and plan. */
 export const updateCompanyBody = z.object({
-  name: z.string().trim().min(2).max(120).optional(),
+  name: text(120, 2).optional(),
   status: companyStatus.optional(),
-  website: z.string().url().nullable().optional(),
-  industry: z.string().max(80).nullable().optional(),
-  phone: z.string().max(40).nullable().optional(),
-  timezone: z.string().max(64).optional(),
-  plan: z.string().max(60).nullable().optional(),
+  website: clearableField(url(300)),
+  industry: clearableText(80),
+  phone: clearableField(phone()),
+  timezone: timezone().optional(),
+  plan: clearableText(80),
 }).openapi("UpdateCompanyBody");
 
 export const companyDto = z.object({

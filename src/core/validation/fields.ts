@@ -36,6 +36,17 @@ export const clearableText = (max: number) =>
     .transform((v) => v || null)
     .optional();
 
+const blank = z.string().regex(/^\s*$/);
+
+/** Optional formatted field (phone, URL, id...): a blank string means "not given". */
+export const optionalField = <T extends z.ZodType>(schema: T) => z.union([blank.transform(() => undefined), schema]).optional();
+
+/** Clearable formatted field: a blank string or null becomes `null`. */
+export const clearableField = <T extends z.ZodType>(schema: T) =>
+  z
+    .union([blank.transform(() => null), z.null(), schema])
+    .optional();
+
 /** Lower-cased, trimmed email address (RFC 5321 length limit). */
 export const email = () => z.string().trim().toLowerCase().max(254, "Must be at most 254 characters").pipe(z.email("Enter a valid email address"));
 

@@ -10,7 +10,7 @@ import { inviteEmail } from "../../core/mail/templates.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
 import type { User } from "../../generated/prisma/client.js";
 import type { Prisma } from "../../generated/prisma/client.js";
-import { issuePasswordToken } from "../auth/auth.service.js";
+import { assertPasswordAllowed, issuePasswordToken } from "../auth/auth.service.js";
 import { usersRepository as repo } from "./users.repository.js";
 import type { createUserBody, listUsersQuery, updateProfileBody, updateUserBody } from "./users.schemas.js";
 
@@ -31,6 +31,7 @@ export const usersService = {
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createUserBody>) {
     const companyId = requireCompanyId(scope);
     if (await repo.findByEmail(body.email.toLowerCase())) throw new ConflictError("A user with this email already exists", "EMAIL_TAKEN");
+    if (body.password) assertPasswordAllowed(body.password, body.email, "password");
     const invited = !body.password;
     // An invitee's initial password is random and never shown; they choose their own through the emailed link.
     const password = body.password ?? randomToken(32);

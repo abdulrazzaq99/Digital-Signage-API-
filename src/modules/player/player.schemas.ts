@@ -1,11 +1,33 @@
 import { z } from "zod";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
+import { id, int, optionalField, optionalText, text } from "../../core/validation/fields.js";
 
-export const pairingSessionBody = z.object({ deviceId: z.string().trim().min(4).max(120), model: z.string().max(120).optional(), playerVersion: z.string().max(40).optional(), appVersion: z.string().max(40).optional() }).openapi("PairingSessionBody");
-export const sessionParams = z.object({ sessionId: z.string().min(1) });
-export const heartbeatBody = z.object({ playerVersion: z.string().max(40).optional(), appVersion: z.string().max(40).optional(), firmware: z.string().max(40).optional(), ip: z.string().max(64).optional(), resolution: z.string().max(20).optional(), storageFree: z.number().int().nonnegative().optional(), storageTotal: z.number().int().nonnegative().optional(), currentVersion: z.number().int().nonnegative().optional(), state: z.enum(["PLAYING", "SYNCING", "READY", "OFFLINE", "ERROR"]).optional() }).openapi("HeartbeatBody");
-export const syncAckBody = z.object({ version: z.number().int().nonnegative(), status: z.enum(["downloaded", "activated", "failed"]).default("activated"), error: z.string().max(500).optional() }).openapi("SyncAckBody");
-export const diagnosticsBody = z.object({ level: z.enum(["info", "warn", "error"]).default("info"), event: z.string().max(80), detail: z.record(z.string(), z.unknown()).optional() }).openapi("DiagnosticsBody");
+const MAX_DETAIL_KEYS = 50;
+const MAX_DETAIL_BYTES = 8 * 1024;
+
+export const pairingSessionBody = z.object({ deviceId: text(120, 4), model: optionalText(120), playerVersion: optionalText(40), appVersion: optionalText(40) }).openapi("PairingSessionBody");
+export const sessionParams = z.object({ sessionId: id() });
+export const heartbeatBody = z
+  .object({
+    playerVersion: optionalText(40), appVersion: optionalText(40), firmware: optionalText(40),
+    ip: optionalField(z.union([z.ipv4(), z.ipv6()], { error: "Enter a valid IP address" })),
+    resolution: optionalField(z.string().trim().regex(/^\d{2,5}x\d{2,5}$/, "Use WIDTHxHEIGHT, e.g. 1920x1080")),
+    storageFree: int(0, 2 ** 53).optional(), storageTotal: int(0, 2 ** 53).optional(), currentVersion: int(0, 2 ** 31).optional(),
+    state: z.enum(["PLAYING", "SYNCING", "READY", "OFFLINE", "ERROR"]).optional(),
+  })
+  .openapi("HeartbeatBody");
+export const syncAckBody = z.object({ version: int(0, 2 ** 31), status: z.enum(["downloaded", "activated", "failed"]).default("activated"), error: optionalText(500) }).openapi("SyncAckBody");
+export const diagnosticsBody = z
+  .object({
+    level: z.enum(["info", "warn", "error"]).default("info"),
+    event: text(80),
+    detail: z
+      .record(z.string().max(60), z.unknown())
+      .refine((d) => Object.keys(d).length <= MAX_DETAIL_KEYS, `At most ${MAX_DETAIL_KEYS} detail keys`)
+      .refine((d) => Buffer.byteLength(JSON.stringify(d)) <= MAX_DETAIL_BYTES, "Detail must be at most 8 KB")
+      .optional(),
+  })
+  .openapi("DiagnosticsBody");
 
 const manifestItem = z.object({ assetId: z.string(), position: z.number(), durationSec: z.number() }).openapi("ManifestItem");
 export const manifestDto = z.object({

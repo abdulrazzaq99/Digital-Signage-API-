@@ -8,6 +8,7 @@ import { ForbiddenError, UnauthorizedError, ValidationError } from "../../core/e
 import { queueMail } from "../../core/mail/index.js";
 import { passwordResetEmail } from "../../core/mail/templates.js";
 import { logger } from "../../core/middleware/logger.js";
+import { passwordUsesEmail } from "../../core/validation/fields.js";
 import { redis } from "../../core/redis/client.js";
 import type { User } from "../../generated/prisma/client.js";
 import { authRepository as repo } from "./auth.repository.js";
@@ -39,6 +40,11 @@ export async function issuePasswordToken(userId: string, ttlSec: number): Promis
   const token = randomToken(32);
   await repo.createPasswordReset({ userId, tokenHash: sha256(token), expiresAt: new Date(Date.now() + ttlSec * 1000) });
   return token;
+}
+
+/** Rejects a new password built from the account's email name (the schema has already checked strength). */
+export function assertPasswordAllowed(pw: string, userEmail: string, field: "password" | "newPassword"): void {
+  if (passwordUsesEmail(pw, userEmail)) throw new ValidationError("Validation failed", [{ path: `body.${field}`, message: "Don't use your email name in your password" }]);
 }
 
 export const refreshGraceKey = (tokenHash: string) => `refresh:grace:${tokenHash}`;
@@ -114,6 +120,9 @@ export const authService = {
   async resetPassword(token: string, password: string): Promise<void> {
     const reset = await repo.findPasswordReset(sha256(token));
     if (!reset || reset.usedAt || reset.expiresAt < new Date()) throw new ValidationError("Reset link is invalid or has expired", undefined, "RESET_INVALID");
+    const user = await repo.findUserById(reset.userId);
+    if (!user) throw new ValidationError("Reset link is invalid or has expired", undefined, "RESET_INVALID");
+    assertPasswordAllowed(password, user.email, "password");
     await repo.updatePassword(reset.userId, await argon2.hash(password));
     await repo.usePasswordReset(reset.id);
     await repo.revokeAllForUser(reset.userId);
@@ -122,6 +131,8 @@ export const authService = {
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
     const user = await repo.findUserById(userId);
     if (!user) throw new UnauthorizedError();
+    if (newPassword === currentPassword) throw new ValidationError("Validation failed", [{ path: "body.newPassword", message: "Choose a different password" }]);
+    assertPasswordAllowed(newPassword, user.email, "newPassword");
     if (!(await argon2.verify(user.passwordHash, currentPassword))) throw new ValidationError("Current password is incorrect", undefined, "PASSWORD_MISMATCH");
     await repo.updatePassword(userId, await argon2.hash(newPassword));
     await repo.revokeAllForUser(userId);

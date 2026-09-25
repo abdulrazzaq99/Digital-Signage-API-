@@ -2,40 +2,43 @@ import { z } from "zod";
 import { queryFlag } from "../../core/http/query.js";
 import { paginationQuery } from "../../core/http/pagination.js";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
+import { clearableField, clearableText, id, list, optionalField, optionalText, tags, text } from "../../core/validation/fields.js";
 
 export const screenStatus = z.enum(["ONLINE", "OFFLINE", "ERROR"]);
 export const orientation = z.enum(["LANDSCAPE", "PORTRAIT"]);
-export const idParams = z.object({ id: z.string().min(1) });
+export const idParams = z.object({ id: id() });
 
 export const listScreensQuery = paginationQuery.extend({
-  search: z.string().trim().max(100).optional(),
+  search: optionalText(100),
   status: screenStatus.optional(),
-  groupId: z.string().optional(),
+  groupId: id().optional(),
   orientation: orientation.optional(),
   personal: queryFlag(),
 });
 
 export const pairBody = z.object({
-  code: z.string().trim().min(4).max(12).transform((s) => s.toUpperCase()),
-  name: z.string().trim().min(2).max(120),
-  location: z.string().trim().max(160).optional(),
+  code: text(12, 4).regex(/^[A-Za-z0-9]+$/, "Enter the code shown on the screen").transform((s) => s.toUpperCase()),
+  name: text(120, 2),
+  location: optionalText(160),
   orientation: orientation.default("LANDSCAPE"),
-  groupId: z.string().optional(),
-  tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+  groupId: optionalField(id()),
+  tags: tags().default([]),
 }).openapi("PairScreenBody");
 
+/** Blank or null clears `location`; blank or null `groupId` takes the screen out of its group. */
 export const updateScreenBody = z.object({
-  name: z.string().trim().min(2).max(120).optional(),
-  location: z.string().trim().max(160).nullable().optional(),
+  name: text(120, 2).optional(),
+  location: clearableText(160),
   orientation: orientation.optional(),
-  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
-  groupId: z.string().nullable().optional(),
+  tags: tags().optional(),
+  groupId: clearableField(id()),
 }).openapi("UpdateScreenBody");
 
 export const remoteCommandBody = z.object({ command: z.enum(["refresh", "restart_player"]) }).openapi("RemoteCommandBody");
 
-export const createGroupBody = z.object({ name: z.string().trim().min(2).max(120), description: z.string().max(300).optional(), screenIds: z.array(z.string()).default([]) }).openapi("CreateGroupBody");
-export const updateGroupBody = z.object({ name: z.string().trim().min(2).max(120).optional(), description: z.string().max(300).nullable().optional(), screenIds: z.array(z.string()).optional() }).openapi("UpdateGroupBody");
+const screenIds = list(id(), 500);
+export const createGroupBody = z.object({ name: text(120, 2), description: optionalText(300), screenIds: screenIds.default([]) }).openapi("CreateGroupBody");
+export const updateGroupBody = z.object({ name: text(120, 2).optional(), description: clearableText(300), screenIds: screenIds.optional() }).openapi("UpdateGroupBody");
 
 export const screenDto = z.object({
   id: z.string(), companyId: z.string(), name: z.string(), location: z.string().nullable(), orientation, status: screenStatus, syncState: z.string(), tags: z.array(z.string()), isPersonal: z.boolean(),

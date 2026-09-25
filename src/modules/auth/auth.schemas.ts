@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { registry, envelope, jsonBody, ErrorEnvelope } from "../../core/openapi/registry.js";
+import { email, password, passwordInput, token } from "../../core/validation/fields.js";
 
-export const loginBody = z.object({ email: z.string().email(), password: z.string().min(1) }).openapi("LoginBody");
-export const refreshBody = z.object({ refreshToken: z.string().min(1) }).openapi("RefreshBody");
-export const forgotBody = z.object({ email: z.string().email() }).openapi("ForgotPasswordBody");
-export const resetBody = z.object({ token: z.string().min(1), password: z.string().min(8).max(128) }).openapi("ResetPasswordBody");
-export const changePasswordBody = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8).max(128) }).openapi("ChangePasswordBody");
+export const loginBody = z.object({ email: email(), password: passwordInput() }).openapi("LoginBody");
+export const refreshBody = z.object({ refreshToken: token(2048) }).openapi("RefreshBody");
+export const forgotBody = z.object({ email: email() }).openapi("ForgotPasswordBody");
+export const resetBody = z.object({ token: token(), password: password() }).openapi("ResetPasswordBody");
+export const changePasswordBody = z.object({ currentPassword: passwordInput(), newPassword: password() }).openapi("ChangePasswordBody");
 
 export const userDto = z
   .object({ id: z.string(), email: z.string(), name: z.string(), platformRole: z.string(), companyRole: z.string().nullable(), companyId: z.string().nullable(), title: z.string().nullable(), phone: z.string().nullable() })

@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { paginationQuery } from "../../core/http/pagination.js";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
+import { clearableField, clearableText, email, id, optionalField, optionalText, password, phone, text } from "../../core/validation/fields.js";
 
 export const companyRole = z.enum(["ADMIN", "EDITOR", "VIEWER"]);
-export const listUsersQuery = paginationQuery.extend({ search: z.string().trim().max(100).optional() });
-export const userIdParams = z.object({ id: z.string().min(1) });
-export const createUserBody = z.object({ email: z.string().email().max(160), name: z.string().trim().min(2).max(120), role: companyRole, password: z.string().min(8).max(128).optional(), title: z.string().max(80).optional(), phone: z.string().max(40).optional() }).openapi("CreateUserBody");
-export const updateUserBody = z.object({ name: z.string().trim().min(2).max(120).optional(), role: companyRole.optional(), title: z.string().max(80).nullable().optional(), phone: z.string().max(40).nullable().optional(), isActive: z.boolean().optional() }).openapi("UpdateUserBody");
-export const updateProfileBody = z.object({ name: z.string().trim().min(2).max(120).optional(), title: z.string().max(80).nullable().optional(), phone: z.string().max(40).nullable().optional() }).openapi("UpdateProfileBody");
+export const listUsersQuery = paginationQuery.extend({ search: optionalText(100) });
+export const userIdParams = z.object({ id: id() });
+export const createUserBody = z.object({ email: email(), name: text(120, 2), role: companyRole, password: optionalField(password()), title: optionalText(80), phone: optionalField(phone()) }).openapi("CreateUserBody");
+export const updateUserBody = z.object({ name: text(120, 2).optional(), role: companyRole.optional(), title: clearableText(80), phone: clearableField(phone()), isActive: z.boolean().optional() }).openapi("UpdateUserBody");
+export const updateProfileBody = z.object({ name: text(120, 2).optional(), title: clearableText(80), phone: clearableField(phone()) }).openapi("UpdateProfileBody");
 
 export const userDto = z.object({ id: z.string(), email: z.string(), name: z.string(), role: companyRole.nullable(), title: z.string().nullable(), phone: z.string().nullable(), status: z.enum(["ACTIVE", "INVITED", "SUSPENDED"]), lastLoginAt: z.string().nullable(), createdAt: z.string() }).openapi("User");
 
