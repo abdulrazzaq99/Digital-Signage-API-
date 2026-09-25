@@ -245,3 +245,25 @@ describe("list filters", () => {
     expect(invalid.status).toBe(400);
   });
 });
+
+describe("screen input validation", () => {
+  it("treats a blank location or group on PATCH as clearing it", async () => {
+    const ctx = await customerContext();
+    const { screen } = await pairScreen(ctx.auth);
+    const group = (await api().post("/api/v1/screen-groups").set(ctx.auth).send({ name: "Lobby", screenIds: [screen.id] })).body.data;
+    expect(group.screenIds).toEqual([screen.id]);
+    const res = await api().patch(`/api/v1/screens/${screen.id}`).set(ctx.auth).send({ location: "", groupId: "", tags: ["Lobby", "lobby", " Front "] });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ location: null, groups: [], tags: ["lobby", "front"] });
+  });
+
+  it("rejects malformed ids, too many tags and oversized screen lists", async () => {
+    const ctx = await customerContext();
+    const { screen } = await pairScreen(ctx.auth);
+    expect((await api().patch(`/api/v1/screens/${screen.id}`).set(ctx.auth).send({ groupId: "group-1" })).body.error.details[0].path).toBe("body.groupId");
+    expect((await api().patch(`/api/v1/screens/${screen.id}`).set(ctx.auth).send({ tags: Array.from({ length: 21 }, (_, i) => `t${i}`) })).status).toBe(400);
+    const screenIds = Array.from({ length: 501 }, (_, i) => `c${String(i).padStart(24, "0")}`);
+    expect((await api().post("/api/v1/screen-groups").set(ctx.auth).send({ name: "Big", screenIds })).body.error.details[0].path).toBe("body.screenIds");
+    expect((await api().post("/api/v1/screens/pair").set(ctx.auth).send({ code: "AB-12!", name: "X1" })).status).toBe(400);
+  });
+});

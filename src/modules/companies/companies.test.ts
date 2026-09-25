@@ -157,3 +157,52 @@ describe("licenses", () => {
     expect(res.body.data[0].company.name).toBeTypeOf("string");
   });
 });
+
+describe("company and user input validation", () => {
+  it("rejects unsafe websites, bad phones, unknown time zones and unknown keys", async () => {
+    const admin = await superAdminContext();
+    const cases: [Record<string, unknown>, string][] = [
+      [{ website: "javascript:alert(1)" }, "body.website"],
+      [{ phone: "call reception" }, "body.phone"],
+      [{ timezone: "Mars/Olympus" }, "body.timezone"],
+      [{ screenLimit: 0 }, "body.screenLimit"],
+      [{ colour: "red" }, "body"],
+    ];
+    for (const [extra, path] of cases) {
+      const res = await api().post("/api/v1/companies").set(admin.auth).send({ name: "Acme", screenLimit: 5, ...extra });
+      expect(res.status, path).toBe(400);
+      expect(res.body.error.details.map((d: { path: string }) => d.path)).toContain(path);
+    }
+  });
+
+  it("normalises phones and clears optional fields sent blank", async () => {
+    const ctx = await customerContext();
+    const set = await api().patch(`/api/v1/companies/${ctx.company.id}`).set(ctx.auth).send({ phone: "+44 (20) 7946-0000", website: "https://acme.example", timezone: "Europe/London" });
+    expect(set.body.data).toMatchObject({ phone: "+442079460000", website: "https://acme.example", timezone: "Europe/London" });
+    const cleared = await api().patch(`/api/v1/companies/${ctx.company.id}`).set(ctx.auth).send({ phone: "", website: null });
+    expect(cleared.body.data).toMatchObject({ phone: null, website: null });
+  });
+
+  it("rejects malformed ids and past licence expiry", async () => {
+    const admin = await superAdminContext();
+    const company = await createCompany();
+    expect((await api().get("/api/v1/companies/123").set(admin.auth)).status).toBe(400);
+    const past = await api().put(`/api/v1/companies/${company.id}/license`).set(admin.auth).send({ expiresAt: "2020-01-01T00:00:00Z" });
+    expect(past.status).toBe(400);
+    expect(past.body.error.details).toEqual([{ path: "body.expiresAt", message: "The expiry must be in the future" }]);
+    expect((await api().put(`/api/v1/companies/${company.id}/license`).set(admin.auth).send({ expiresAt: new Date(Date.now() + 86_400_000).toISOString() })).status).toBe(200);
+  });
+
+  it("user create checks the password against the email and the phone format", async () => {
+    const ctx = await customerContext();
+    const named = await api().post("/api/v1/users").set(ctx.auth).send({ email: "jordan@test.local", name: "Jordan", role: "EDITOR", password: "Jordan-2026-x" });
+    expect(named.body.error.details).toEqual([{ path: "body.password", message: "Don't use your email name in your password" }]);
+    const weak = await api().post("/api/v1/users").set(ctx.auth).send({ email: "jo@test.local", name: "Jo", role: "EDITOR", password: "password" });
+    expect(weak.status).toBe(400);
+    const phone = await api().post("/api/v1/users").set(ctx.auth).send({ email: "jo@test.local", name: "Jo", role: "EDITOR", phone: "12" });
+    expect(phone.body.error.details[0].path).toBe("body.phone");
+    const ok = await api().post("/api/v1/users").set(ctx.auth).send({ email: "jo@test.local", name: "Jo", role: "EDITOR", phone: "", title: "" });
+    expect(ok.status).toBe(201);
+    expect(ok.body.data).toMatchObject({ phone: null, title: null });
+  });
+});

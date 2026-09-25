@@ -48,9 +48,11 @@ describe("sending", () => {
     const admin = await superAdminContext();
     const missing = await api().post("/api/v1/notifications").set(admin.auth).send({ title: "New offer", body: "Something", type: "offer", audience: { kind: "all" } });
     expect(missing.status).toBe(400);
-    const unknown = await api().post("/api/v1/notifications").set(admin.auth).send({ title: "Play now", body: "Scratch to win", type: "campaign", targetId: "nope", audience: { kind: "all" } });
+    const unknown = await api().post("/api/v1/notifications").set(admin.auth).send({ title: "Play now", body: "Scratch to win", type: "campaign", targetId: "cmu418w8h000d01lfllymhxg0", audience: { kind: "all" } });
     expect(unknown.status).toBe(400);
     expect(unknown.body.error.code).toBe("TARGET_NOT_FOUND");
+    const malformed = await api().post("/api/v1/notifications").set(admin.auth).send({ title: "Play now", body: "Scratch to win", type: "campaign", targetId: "nope", audience: { kind: "all" } });
+    expect(malformed.body.error).toMatchObject({ code: "VALIDATION_ERROR", details: [{ path: "body.targetId", message: "Invalid id" }] });
   });
 
   it("drops subscriptions the provider reports as invalid", async () => {
@@ -116,5 +118,17 @@ describe("inbox", () => {
     expect((await api().get(`/api/v1/notifications/${mine}`).set(ctx.auth)).body.data).toMatchObject({ id: mine, title: "For my company", body: "Body text" });
     expect((await api().get(`/api/v1/notifications/${theirs}`).set(ctx.auth)).status).toBe(404);
     expect((await api().get(`/api/v1/notifications/${theirs}`).set(admin.auth)).status).toBe(200);
+  });
+});
+
+describe("notification input validation", () => {
+  it("rejects unsafe deep links, past send times and oversized audiences", async () => {
+    const admin = await superAdminContext();
+    const base = { title: "Hello", body: "Everyone", audience: { kind: "all" } };
+    expect((await api().post("/api/v1/notifications").set(admin.auth).send({ ...base, deepLink: "javascript:alert(1)" })).body.error.details[0].path).toBe("body.deepLink");
+    const past = await api().post("/api/v1/notifications").set(admin.auth).send({ ...base, scheduledAt: "2020-01-01T00:00:00Z" });
+    expect(past.body.error.details).toEqual([{ path: "body.scheduledAt", message: "The send time can't be in the past" }]);
+    const ids = Array.from({ length: 1001 }, (_, i) => `c${String(i).padStart(24, "0")}`);
+    expect((await api().post("/api/v1/notifications").set(admin.auth).send({ ...base, audience: { kind: "companies", companyIds: ids } })).status).toBe(400);
   });
 });

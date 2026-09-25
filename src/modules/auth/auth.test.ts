@@ -179,3 +179,35 @@ describe("password reset and change", () => {
     expect(relogin.status).toBe(200);
   });
 });
+
+describe("password rules", () => {
+  it("reset rejects weak passwords and ones built from the email name, and keeps the link usable", async () => {
+    const user = await createUser({ email: "sarah@test.local" });
+    await api().post("/api/v1/auth/forgot-password").send({ email: user.email });
+    const token = linkToken((await queuedMail(user.email))[0]);
+    for (const weak of ["abcdefghij", "password1"]) {
+      expect((await api().post("/api/v1/auth/reset-password").send({ token, password: weak })).status, weak).toBe(400);
+    }
+    const named = await api().post("/api/v1/auth/reset-password").send({ token, password: "Sarah-2026-Pass" });
+    expect(named.status).toBe(400);
+    expect(named.body.error.details).toEqual([{ path: "body.password", message: "Don't use your email name in your password" }]);
+    expect((await api().post("/api/v1/auth/reset-password").send({ token, password: "Blue-Kettle-42" })).status).toBe(204);
+  });
+
+  it("change-password rejects reusing the current password or the email name", async () => {
+    const user = await createUser({ email: "morgan@test.local" });
+    const tokens = (await api().post("/api/v1/auth/login").send({ email: user.email, password: user.password })).body.data;
+    const auth = { Authorization: `Bearer ${tokens.accessToken}` };
+    const same = await api().post("/api/v1/auth/change-password").set(auth).send({ currentPassword: user.password, newPassword: user.password });
+    expect(same.body.error.details).toEqual([{ path: "body.newPassword", message: "Choose a different password" }]);
+    const named = await api().post("/api/v1/auth/change-password").set(auth).send({ currentPassword: user.password, newPassword: "Morgan-Pass-99" });
+    expect(named.body.error.details).toEqual([{ path: "body.newPassword", message: "Don't use your email name in your password" }]);
+  });
+
+  it("login lower-cases the email and bounds the password and body", async () => {
+    const user = await createUser({ email: "casey@test.local" });
+    expect((await api().post("/api/v1/auth/login").send({ email: "  Casey@Test.LOCAL ", password: user.password })).status).toBe(200);
+    expect((await api().post("/api/v1/auth/login").send({ email: user.email, password: "x".repeat(129) })).status).toBe(400);
+    expect((await api().post("/api/v1/auth/login").send({ email: user.email, password: user.password, remember: true })).status).toBe(400);
+  });
+});

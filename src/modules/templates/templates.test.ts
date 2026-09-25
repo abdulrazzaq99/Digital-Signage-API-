@@ -103,3 +103,17 @@ describe("template rendering (B7)", () => {
     expect((await api().get(`/api/v1/template-instances/${inst.id}`).set(ctx.auth)).body.data).toMatchObject({ rendered: true, rendering: false });
   });
 });
+
+describe("template input validation", () => {
+  it("rejects non-slug value keys and oversized values", async () => {
+    const ctx = await customerContext();
+    const t = await prisma.template.create({ data: { name: "Promo", category: "Retail", fields, isGlobal: true } });
+    const badKey = await api().post("/api/v1/template-instances").set(ctx.auth).send({ templateId: t.id, name: "Promo", values: { "Head Line": "Hi" } });
+    expect(badKey.status).toBe(400);
+    const long = await api().post("/api/v1/template-instances").set(ctx.auth).send({ templateId: t.id, name: "Promo", values: { headline: "x".repeat(2001) } });
+    expect(long.body.error.details[0].path).toBe("body.values.headline");
+    const many = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`k${i}`, "v"]));
+    expect((await api().post("/api/v1/template-instances").set(ctx.auth).send({ templateId: t.id, name: "Promo", values: many })).status).toBe(400);
+    expect((await api().post("/api/v1/template-instances").set(ctx.auth).send({ templateId: "tpl-1", name: "Promo", values: {} })).body.error.details[0].path).toBe("body.templateId");
+  });
+});

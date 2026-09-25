@@ -246,3 +246,14 @@ describe("media processing", () => {
     for (const pg of pages) expect(await headObject(pg.storageKey)).toBeNull();
   });
 });
+
+describe("media input validation", () => {
+  it("lower-cases and de-duplicates tags and bounds finalize metadata", async () => {
+    const ctx = await customerContext();
+    const res = await api().post("/api/v1/media/upload-url").set(ctx.auth).send({ fileName: "a.png", contentType: "image/png", sizeBytes: 10, tags: ["Promo", "promo ", "Summer"] });
+    expect(res.status).toBe(201);
+    expect(res.body.data.asset.tags).toEqual(["promo", "summer"]);
+    const fin = await api().post(`/api/v1/media/${res.body.data.asset.id}/finalize`).set(ctx.auth).send({ width: 20_000 });
+    expect(fin.body.error.details).toEqual([{ path: "body.width", message: "Must be at most 16384" }]);
+  });
+});

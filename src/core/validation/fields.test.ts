@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { deepLink, email, endAfterStart, hexColour, id, int, list, password, passwordUsesEmail, phone, tags, text, timezone, url } from "./fields.js";
+import { clearableField, deepLink, email, endAfterStart, hexColour, id, int, list, optionalField, password, passwordUsesEmail, phone, tags, text, timezone, url } from "./fields.js";
 
 const ok = (s: z.ZodType, v: unknown) => s.safeParse(v);
 
@@ -75,5 +75,14 @@ describe("field building blocks", () => {
     const r = s.safeParse({ startsAt: "2026-10-03", endsAt: "2026-10-02" });
     expect(r.success).toBe(false);
     expect(r.error?.issues[0]?.path).toEqual(["endsAt"]);
+  });
+
+  it("optionalField and clearableField treat blank strings as not given or cleared", () => {
+    expect(optionalField(phone()).parse("")).toBeUndefined();
+    expect(optionalField(phone()).parse("+44 20 7946 0000")).toBe("+442079460000");
+    expect(ok(optionalField(phone()), "abc").success).toBe(false);
+    expect(clearableField(url()).parse(" ")).toBeNull();
+    expect(clearableField(url()).parse(null)).toBeNull();
+    expect(ok(clearableField(url()), "javascript:alert(1)").success).toBe(false);
   });
 });

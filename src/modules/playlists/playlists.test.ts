@@ -146,12 +146,16 @@ describe("schedules", () => {
     const p2 = (await api().post("/api/v1/playlists").set(ctx.auth).send({ name: "Default", items: [{ assetId: a.id, durationSec: 5 }] })).body.data;
     await api().post(`/api/v1/playlists/${p2.id}/publish`).set(ctx.auth).set("Idempotency-Key", "d").send({ screenIds: [screen.id] });
 
+    const now = new Date().toISOString();
     const past = new Date(Date.now() - 3600_000).toISOString();
     const future = new Date(Date.now() + 3600_000).toISOString();
     const bad = await api().post("/api/v1/schedules").set(ctx.auth).set("Idempotency-Key", "s0").send({ playlistId: p1.id, targetKind: "SCREEN", targetId: screen.id, startsAt: future, endsAt: past });
     expect(bad.status).toBe(400);
+    const started = await api().post("/api/v1/schedules").set(ctx.auth).set("Idempotency-Key", "s0b").send({ playlistId: p1.id, targetKind: "SCREEN", targetId: screen.id, startsAt: past, endsAt: future });
+    expect(started.status).toBe(400);
+    expect(started.body.error.details).toEqual([{ path: "body.startsAt", message: "The start can't be in the past" }]);
 
-    const groupSched = await api().post("/api/v1/schedules").set(ctx.auth).set("Idempotency-Key", "s1").send({ playlistId: p1.id, targetKind: "GROUP", targetId: group.id, startsAt: past, endsAt: future, timezone: "Europe/London" });
+    const groupSched = await api().post("/api/v1/schedules").set(ctx.auth).set("Idempotency-Key", "s1").send({ playlistId: p1.id, targetKind: "GROUP", targetId: group.id, startsAt: now, endsAt: future, timezone: "Europe/London" });
     expect(groupSched.status).toBe(201);
     expect(groupSched.body.data).toMatchObject({ status: "ACTIVE", targetName: "Group", timezone: "Europe/London" });
 
@@ -163,7 +167,7 @@ describe("schedules", () => {
     const active1 = await api().get(`/api/v1/schedules/active?screenId=${screen.id}`).set(ctx.auth);
     expect(active1.body.data).toMatchObject({ source: "SCHEDULE_GROUP", playlistId: p1.id });
 
-    const screenSched = await api().post("/api/v1/schedules").set(ctx.auth).set("Idempotency-Key", "s3").send({ playlistId: p2.id, targetKind: "SCREEN", targetId: screen.id, startsAt: past, endsAt: future });
+    const screenSched = await api().post("/api/v1/schedules").set(ctx.auth).set("Idempotency-Key", "s3").send({ playlistId: p2.id, targetKind: "SCREEN", targetId: screen.id, startsAt: now, endsAt: future });
     expect(screenSched.status).toBe(201);
     const active2 = await api().get(`/api/v1/schedules/active?screenId=${screen.id}`).set(ctx.auth);
     expect(active2.body.data).toMatchObject({ source: "SCHEDULE_SCREEN", playlistId: p2.id });
@@ -196,5 +200,19 @@ describe("schedules", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("PLAYLIST_NOT_FOUND");
     expect((await prisma.schedule.findUnique({ where: { id: sched.id } }))?.playlistId).toBe(mine.id);
+  });
+});
+
+describe("playlist input validation", () => {
+  it("caps items, durations and publish targets", async () => {
+    const ctx = await customerContext();
+    const a = await readyAsset(ctx.company.id);
+    const items = Array.from({ length: 501 }, () => ({ assetId: a.id, durationSec: 5 }));
+    expect((await api().post("/api/v1/playlists").set(ctx.auth).send({ name: "Long", items })).body.error.details[0].path).toBe("body.items");
+    expect((await api().post("/api/v1/playlists").set(ctx.auth).send({ name: "Day", items: [{ assetId: a.id, durationSec: 86_401 }] })).status).toBe(400);
+    const p = (await api().post("/api/v1/playlists").set(ctx.auth).send({ name: "Video", items: [{ assetId: a.id, durationSec: 7200 }] })).body.data;
+    expect(p.items[0].durationSec).toBe(7200);
+    const screenIds = Array.from({ length: 501 }, (_, i) => `c${String(i).padStart(24, "0")}`);
+    expect((await api().post(`/api/v1/playlists/${p.id}/publish`).set(ctx.auth).set("Idempotency-Key", "big").send({ screenIds })).body.error.details[0].path).toBe("body.screenIds");
   });
 });

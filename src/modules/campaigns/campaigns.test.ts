@@ -9,7 +9,7 @@ afterAll(closeAll);
 const offerBody = { title: "Display Upgrade Programme", category: "Hardware", summary: "Trade in your screens for 4K displays at preferential pricing.", description: "Full description of the upgrade programme for account holders.", instructions: "Contact your account manager to request a quotation.", contact: { name: "James Whitfield", email: "j@example.com" } };
 
 async function activeCampaign(admin: { auth: Record<string, string> }, overrides: Record<string, unknown> = {}) {
-  const res = await api().post("/api/v1/campaigns").set(admin.auth).send({ title: "Summer Draw", startsAt: new Date(Date.now() - 3600_000).toISOString(), endsAt: new Date(Date.now() + 86_400_000).toISOString(), maxAttempts: 1, loseWeight: 0, activate: true, prizes: [{ name: "Content Pack", value: "£320", quantity: 5, weight: 1 }], ...overrides });
+  const res = await api().post("/api/v1/campaigns").set(admin.auth).send({ title: "Summer Draw", startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 86_400_000).toISOString(), maxAttempts: 1, loseWeight: 0, activate: true, prizes: [{ name: "Content Pack", value: "£320", quantity: 5, weight: 1 }], ...overrides });
   expect(res.status).toBe(201);
   return res.body.data as { id: string; prizes: { id: string }[] };
 }
@@ -130,5 +130,22 @@ describe("scratch campaigns", () => {
     expect(r2.body.data.redeemedAt).toBe(r1.body.data.redeemedAt);
     const removePrize = await api().delete(`/api/v1/campaigns/${campaign.id}/prizes/${campaign.prizes[0]!.id}`).set(admin.auth);
     expect(removePrize.body.error.code).toBe("PRIZE_AWARDED");
+  });
+});
+
+describe("campaign input validation", () => {
+  it("rejects a past start, an end before the start, and too many prizes", async () => {
+    const admin = await superAdminContext();
+    const base = { title: "Winter Draw", startsAt: new Date(Date.now() + 3600_000).toISOString(), endsAt: new Date(Date.now() + 86_400_000).toISOString(), prizes: [{ name: "Mug", quantity: 1 }] };
+    const past = await api().post("/api/v1/campaigns").set(admin.auth).send({ ...base, startsAt: "2020-01-01T00:00:00Z" });
+    expect(past.body.error.details).toContainEqual({ path: "body.startsAt", message: "The start can't be in the past" });
+    const reversed = await api().post("/api/v1/campaigns").set(admin.auth).send({ ...base, endsAt: new Date(Date.now() + 60_000).toISOString() });
+    expect(reversed.body.error.details).toEqual([{ path: "body.endsAt", message: "Must be after the start" }]);
+    const many = await api().post("/api/v1/campaigns").set(admin.auth).send({ ...base, prizes: Array.from({ length: 51 }, (_, i) => ({ name: `P${i}`, quantity: 1 })) });
+    expect(many.body.error.details[0].path).toBe("body.prizes");
+    const created = await api().post("/api/v1/campaigns").set(admin.auth).send(base);
+    expect(created.status).toBe(201);
+    const patch = await api().patch(`/api/v1/campaigns/${created.body.data.id}`).set(admin.auth).send({ startsAt: "2031-02-01T00:00:00Z", endsAt: "2031-01-01T00:00:00Z" });
+    expect(patch.body.error.details).toEqual([{ path: "body.endsAt", message: "Must be after the start" }]);
   });
 });
