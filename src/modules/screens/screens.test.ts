@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../../core/db/prisma.js";
 import { isOnline } from "../../core/redis/presence.js";
-import { customerContext } from "../../test/factories.js";
+import { customerContext, superAdminContext } from "../../test/factories.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
 
 beforeEach(resetDatabase);
@@ -105,8 +105,13 @@ describe("pairing", () => {
     const ctx = await customerContext({ licenseState: "SUSPENDED" });
     const session = await startPairing();
     const res = await api().post("/api/v1/screens/pair").set(ctx.auth).send({ code: session.code, name: "Blocked" });
+    // The company's users are read-only; the licence check still stops the Super Admin.
     expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe("LICENSE_INACTIVE");
+    expect(res.body.error.code).toBe("COMPANY_READ_ONLY");
+    const admin = await superAdminContext();
+    const byAdmin = await api().post("/api/v1/screens/pair").set(admin.auth).set("X-Company-Id", ctx.company.id).send({ code: session.code, name: "Blocked" });
+    expect(byAdmin.status).toBe(403);
+    expect(byAdmin.body.error.code).toBe("LICENSE_INACTIVE");
   });
 
   it("Viewers cannot pair", async () => {

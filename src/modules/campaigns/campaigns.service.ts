@@ -6,6 +6,7 @@ import { prisma } from "../../core/db/prisma.js";
 import { withTransaction, type Tx } from "../../core/db/transaction.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
+import { assertNameFree } from "../../core/validation/names.js";
 import { presignGet } from "../../core/storage/s3.js";
 import type { Prisma, ScratchCampaign, ScratchPrize } from "../../generated/prisma/client.js";
 import type { addPrizeBody, createCampaignBody, listCampaignsQuery, listWinnersQuery, updateCampaignBody } from "./campaigns.schemas.js";
@@ -76,6 +77,7 @@ export const campaignsService = {
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createCampaignBody>) {
     requirePlatform(scope);
     if (body.artworkKey) await assertImageKey(body.artworkKey, scope.companyId, "body.artworkKey");
+    await assertNameFree("campaign", body.title);
     const c = await withTransaction(async (tx) => {
       const created = await tx.scratchCampaign.create({ data: { title: body.title, description: body.description, status: body.activate ? "ACTIVE" : "DRAFT", startsAt: new Date(body.startsAt), endsAt: new Date(body.endsAt), maxAttempts: body.maxAttempts, requireOffersVisit: body.requireOffersVisit, artworkKey: body.artworkKey, allocation: { loseWeight: body.loseWeight, prizes: [] }, prizes: { create: body.prizes.map((p) => ({ name: p.name, value: p.value, quantity: p.quantity, remaining: p.quantity })) } }, include });
       const allocation: Allocation = { loseWeight: body.loseWeight, prizes: created.prizes.map((p, i) => ({ prizeId: p.id, weight: body.prizes[i]!.weight })) };
@@ -89,6 +91,7 @@ export const campaignsService = {
     requirePlatform(scope);
     const existing = await findCampaign(id);
     if (body.artworkKey && body.artworkKey !== existing.artworkKey) await assertImageKey(body.artworkKey, scope.companyId, "body.artworkKey");
+    await assertNameFree("campaign", body.title, { excludeId: id });
     const startsAt = body.startsAt ? new Date(body.startsAt) : existing.startsAt;
     const endsAt = body.endsAt ? new Date(body.endsAt) : existing.endsAt;
     if (endsAt <= startsAt) throw new ValidationError("endsAt must be after startsAt", undefined, "INVALID_WINDOW");

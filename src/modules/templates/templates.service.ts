@@ -7,6 +7,7 @@ import { requireCompanyId, type AuthUser, type TenantScope } from "../../core/au
 import { prisma } from "../../core/db/prisma.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { enqueue, JobNames } from "../../core/queue/queues.js";
+import { assertNameFree } from "../../core/validation/names.js";
 import { presignGet } from "../../core/storage/s3.js";
 import type { Template, TemplateInstance } from "../../generated/prisma/client.js";
 import { templateField, type TemplateField, type createInstanceBody, type createTemplateBody, type updateInstanceBody } from "./templates.schemas.js";
@@ -94,6 +95,7 @@ export const templatesService = {
     const issues = validateValues(fieldsOf(t), body.values);
     if (issues.length) throw new ValidationError("Template values are invalid", issues, "TEMPLATE_VALUES_INVALID");
     await assertImageValues(companyId, fieldsOf(t), body.values);
+    await assertNameFree("templateInstance", body.name, { companyId });
     const i = await prisma.templateInstance.create({ data: { companyId, templateId: t.id, name: body.name, values: body.values, renderPending: true }, include: { template: true } });
     await enqueue(JobNames.templateRender, { instanceId: i.id, companyId });
     await logActivity({ companyId, actor, action: "template_instance.created", resourceType: "template_instance", resourceId: i.id, summary: `"${i.name}" created from template ${t.name}` });
@@ -103,6 +105,7 @@ export const templatesService = {
   async updateInstance(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updateInstanceBody>) {
     const companyId = requireCompanyId(scope);
     const existing = await findInstance(companyId, id);
+    await assertNameFree("templateInstance", body.name, { companyId, excludeId: id });
     if (body.values) {
       const issues = validateValues(fieldsOf(existing.template), body.values);
       if (issues.length) throw new ValidationError("Template values are invalid", issues, "TEMPLATE_VALUES_INVALID");

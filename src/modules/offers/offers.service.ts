@@ -6,6 +6,7 @@ import type { AuthUser, TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
 import { ForbiddenError, NotFoundError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
+import { assertNameFree } from "../../core/validation/names.js";
 import { Events } from "../../core/realtime/events.js";
 import { getIo } from "../../core/realtime/server.js";
 import { presignGet } from "../../core/storage/s3.js";
@@ -57,6 +58,7 @@ export const offersService = {
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createOfferBody>) {
     requirePlatform(scope);
     if (body.imageKey) await assertImageKey(body.imageKey, scope.companyId, "body.imageKey");
+    await assertNameFree("offer", body.title);
     const o = await prisma.offer.create({ data: { ...body, startsAt: body.startsAt ? new Date(body.startsAt) : null, endsAt: body.endsAt ? new Date(body.endsAt) : null } });
     await logActivity({ actor, action: "offer.created", resourceType: "offer", resourceId: o.id, summary: `Offer "${o.title}" created as draft` });
     return toDto(o, true);
@@ -67,6 +69,7 @@ export const offersService = {
     const existing = await prisma.offer.findUnique({ where: { id } });
     if (!existing) throw new NotFoundError("Offer");
     if (body.imageKey && body.imageKey !== existing.imageKey) await assertImageKey(body.imageKey, scope.companyId, "body.imageKey");
+    await assertNameFree("offer", body.title, { excludeId: id });
     const o = await prisma.offer.update({ where: { id }, data: { ...body, startsAt: body.startsAt === undefined ? undefined : body.startsAt ? new Date(body.startsAt) : null, endsAt: body.endsAt === undefined ? undefined : body.endsAt ? new Date(body.endsAt) : null } });
     await logActivity({ actor, action: "offer.updated", resourceType: "offer", resourceId: id, summary: `Offer "${o.title}" updated${existing.status === "PUBLISHED" ? " while live" : ""}` });
     return toDto(o, true);

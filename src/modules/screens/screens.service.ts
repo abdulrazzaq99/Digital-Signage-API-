@@ -9,6 +9,7 @@ import { prisma } from "../../core/db/prisma.js";
 import { withTransaction } from "../../core/db/transaction.js";
 import { ConflictError, ForbiddenError, GoneError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
+import { assertNameFree } from "../../core/validation/names.js";
 import { Events } from "../../core/realtime/events.js";
 import { emitToCompany, emitToScreen } from "../../core/realtime/server.js";
 import { clearPresence } from "../../core/redis/presence.js";
@@ -217,6 +218,7 @@ export const screensService = {
   },
   async createGroup(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createGroupBody>) {
     const companyId = requireCompanyId(scope);
+    await assertNameFree("screenGroup", body.name, { companyId });
     await assertScreensBelong(companyId, body.screenIds);
     const g = await repo.createGroup({ companyId, name: body.name, description: body.description, members: { create: body.screenIds.map((screenId) => ({ screenId })) } });
     await logActivity({ companyId, actor, action: "group.created", resourceType: "screen_group", resourceId: g.id, summary: `Group "${g.name}" created with ${body.screenIds.length} screens` });
@@ -226,6 +228,7 @@ export const screensService = {
     const companyId = requireCompanyId(scope);
     const existing = await repo.findGroup(companyId, id);
     if (!existing) throw new NotFoundError("Screen group");
+    await assertNameFree("screenGroup", body.name, { companyId, excludeId: id });
     if (body.screenIds) await assertScreensBelong(companyId, body.screenIds);
     // Members joining or leaving gain or lose the group's schedules.
     const g = await changeContent(companyId, body.screenIds ? { groupIds: [id] } : {}, async (tx) => {

@@ -1,5 +1,7 @@
 import type { AuthUser, TenantScope } from "../../core/auth/scope.js";
 import { logActivity } from "../../core/audit/activity.js";
+import { withTransaction } from "../../core/db/transaction.js";
+import { assertNameFree } from "../../core/validation/names.js";
 import { ConflictError, ForbiddenError, NotFoundError } from "../../core/errors/AppError.js";
 import { logger } from "../../core/middleware/logger.js";
 import { enqueue, JobNames } from "../../core/queue/queues.js";
@@ -46,7 +48,8 @@ export const companiesService = {
 
   async create(actor: AuthUser, body: z.infer<typeof createCompanyBody>) {
     const { screenLimit, licenseState, ...rest } = body;
-    const c = await repo.create({ ...rest, code: await repo.nextCode(), license: { create: { screenLimit, state: licenseState } } });
+    await assertNameFree("company", rest.name);
+    const c = await withTransaction(async (tx) => repo.create({ ...rest, code: await repo.nextCode(tx), license: { create: { screenLimit, state: licenseState } } }, tx));
     await logActivity({ companyId: c.id, actor, action: "company.created", resourceType: "company", resourceId: c.id, summary: `"${c.name}" onboarded with ${screenLimit} screen licenses` });
     return toDto(c, { screens: 0, online: 0, offline: 0 });
   },
@@ -56,6 +59,7 @@ export const companiesService = {
     if (scope.kind === "company" && body.status !== undefined) throw new ForbiddenError("Only the Super Admin can change company status", "PLATFORM_ONLY");
     const existing = await repo.findById(id);
     if (!existing) throw new NotFoundError("Company");
+    await assertNameFree("company", body.name, { excludeId: id });
     const c = await repo.update(id, body);
     await logActivity({ companyId: id, actor, action: "company.updated", resourceType: "company", resourceId: id, summary: `${c.name} details updated`, meta: { fields: Object.keys(body) } });
     return toDto(c, await repo.screenCounts(id));

@@ -7,6 +7,7 @@ import { requireCompanyId, tenantWhere, type AuthUser, type TenantScope } from "
 import { withTransaction, type Tx } from "../../core/db/transaction.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
+import { assertNameFree, freeCopyName } from "../../core/validation/names.js";
 import { presignGet } from "../../core/storage/s3.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { playlistsRepository as repo, type PlaylistRow } from "./playlists.repository.js";
@@ -56,6 +57,7 @@ export const playlistsService = {
 
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createPlaylistBody>) {
     const companyId = requireCompanyId(scope);
+    await assertNameFree("playlist", body.name, { companyId });
     const p = await withTransaction(async (tx) => {
       const items = await assertAssets(companyId, body.items, tx);
       const created = await repo.create({ companyId, name: body.name }, tx);
@@ -69,6 +71,7 @@ export const playlistsService = {
   async update(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updatePlaylistBody>) {
     const existing = await repo.findScoped(scope.companyId, id);
     if (!existing) throw new NotFoundError("Playlist");
+    await assertNameFree("playlist", body.name, { companyId: existing.companyId, excludeId: id });
     const p = await changeContent(existing.companyId, { playlistIds: [id] }, async (tx) => {
       if (body.items) await repo.syncItems(id, await assertAssets(existing.companyId, body.items, tx), tx);
       await repo.update(id, { name: body.name }, tx);
@@ -98,7 +101,7 @@ export const playlistsService = {
     const existing = await repo.findScoped(scope.companyId, id);
     if (!existing) throw new NotFoundError("Playlist");
     const copy = await withTransaction(async (tx) => {
-      const created = await repo.create({ companyId: existing.companyId, name: `${existing.name} (copy)` }, tx);
+      const created = await repo.create({ companyId: existing.companyId, name: await freeCopyName("playlist", existing.name, { companyId: existing.companyId, db: tx }) }, tx);
       await repo.syncItems(created.id, existing.items.map((i) => ({ assetId: i.assetId, durationSec: i.durationSec, page: i.page })), tx);
       return repo.findScoped(existing.companyId, created.id, tx);
     });

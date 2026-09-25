@@ -6,6 +6,7 @@ import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
+import { assertNameFree } from "../../core/validation/names.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import type { bindZoneBody, createLayoutBody, publishBody } from "./layouts.schemas.js";
 
@@ -39,6 +40,7 @@ export const layoutsService = {
     const companyId = requireCompanyId(scope);
     const preset = await prisma.layout.findFirst({ where: { isPreset: true, presetId: body.presetId }, include });
     if (!preset) throw new ValidationError("Unknown layout preset", undefined, "PRESET_NOT_FOUND");
+    await assertNameFree("layout", body.name, { companyId });
     const l = await prisma.layout.create({ data: { companyId, presetId: preset.presetId, name: body.name, isPreset: false, zones: { create: preset.zones.map((z) => ({ index: z.index, name: z.name, x: z.x, y: z.y, w: z.w, h: z.h })) } }, include });
     await logActivity({ companyId, actor, action: "layout.created", resourceType: "layout", resourceId: l.id, summary: `Layout "${l.name}" created from ${preset.name}` });
     return toDto(l);
