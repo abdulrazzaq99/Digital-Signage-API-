@@ -3,3 +3,9 @@
 	encode gzip
 	reverse_proxy api:4000
 }
+
+# Web dashboards (Next.js).
+{$WEB_HOST} {
+	encode gzip
+	reverse_proxy web:3000
+}

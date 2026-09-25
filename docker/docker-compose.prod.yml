@@ -1,4 +1,5 @@
-# Single-server production: Postgres, Redis, API, worker and Caddy (HTTPS) on one host; media on S3.
+# Single-server production: Postgres, Redis, API, worker, web dashboards and Caddy (HTTPS) on one host;
+# media on S3. The dashboards build from a checkout of the Digital-Signage repo at WEB_DIR.
 # Run from the repo root: docker compose -f docker/docker-compose.prod.yml --env-file .env.production up -d --build
 name: dsp
 
@@ -85,15 +86,24 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  web:
+    build:
+      context: ${WEB_DIR:-../../web}
+      args:
+        NEXT_PUBLIC_API_URL: https://${API_HOST}
+    restart: unless-stopped
+    logging: *logging
+
   caddy:
     image: caddy:2-alpine
     environment:
       API_HOST: ${API_HOST}
+      WEB_HOST: ${WEB_HOST}
     ports: ["80:80", "443:443"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddydata:/data
-    depends_on: [api]
+    depends_on: [api, web]
     restart: unless-stopped
     logging: *logging
 
