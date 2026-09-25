@@ -7,6 +7,7 @@ import { paginate, pageMeta } from "../../core/http/pagination.js";
 import { Events } from "../../core/realtime/events.js";
 import { emitToScreen } from "../../core/realtime/server.js";
 import { prisma } from "../../core/db/prisma.js";
+import type { Tx } from "../../core/db/transaction.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { schedulesRepository as repo, type ScheduleRow } from "./schedules.repository.js";
 import type { checkConflictsBody, createScheduleBody, listSchedulesQuery, updateScheduleBody } from "./schedules.schemas.js";
@@ -24,6 +25,18 @@ async function toDto(s: ScheduleRow) {
 async function notifyTarget(kind: "SCREEN" | "GROUP", targetId: string) {
   const screenIds = kind === "SCREEN" ? [targetId] : (await prisma.screenGroupMember.findMany({ where: { groupId: targetId }, select: { screenId: true } })).map((m) => m.screenId);
   for (const id of screenIds) emitToScreen(id, Events.scheduleUpdated, { screenId: id, at: new Date().toISOString() });
+}
+
+/** An empty playlist would schedule a blank screen. */
+async function assertNotEmpty(playlistId: string) {
+  if (await prisma.playlistItem.count({ where: { playlistId } })) return;
+  throw new ValidationError("Playlist has no items; add media before scheduling it", [{ path: "body.playlistId", message: "Playlist has no items" }], "PLAYLIST_EMPTY");
+}
+
+async function assertNoConflict(companyId: string, kind: "SCREEN" | "GROUP", targetId: string, startsAt: Date, endsAt: Date | null, excludeId: string | undefined, tx: Tx) {
+  const rows = await repo.overlapping(companyId, kind, targetId, startsAt, endsAt, excludeId, tx);
+  if (!rows.length) return;
+  throw new ConflictError("This schedule overlaps an existing schedule on the same target", "SCHEDULE_CONFLICT", { conflicts: rows.map((r) => ({ scheduleId: r.id, playlistName: r.playlist.name, startsAt: r.startsAt.toISOString(), endsAt: r.endsAt?.toISOString() ?? null })) });
 }
 
 export const schedulesService = {
@@ -45,11 +58,17 @@ export const schedulesService = {
     const companyId = requireCompanyId(scope);
     if (!(await repo.targetExists(companyId, body.targetKind, body.targetId))) throw new ValidationError("Target not found", undefined, "TARGET_NOT_FOUND");
     if (!(await prisma.playlist.count({ where: { id: body.playlistId, companyId } }))) throw new ValidationError("Playlist not found", undefined, "PLAYLIST_NOT_FOUND");
-    const { conflicts } = await this.checkConflicts(scope, body);
-    if (conflicts.length) throw new ConflictError("This schedule overlaps an existing schedule on the same target", "SCHEDULE_CONFLICT", { conflicts });
+    await assertNotEmpty(body.playlistId);
+    const startsAt = new Date(body.startsAt);
+    const endsAt = body.endsAt ? new Date(body.endsAt) : null;
     // The new schedule's ID isn't known up front, so its target's screens are named directly.
     const target = body.targetKind === "SCREEN" ? { screenIds: [body.targetId] } : { groupIds: [body.targetId] };
-    const s = await changeContent(companyId, target, (tx) => repo.create({ companyId, playlistId: body.playlistId, targetKind: body.targetKind, targetId: body.targetId, startsAt: new Date(body.startsAt), endsAt: body.endsAt ? new Date(body.endsAt) : null, timezone: body.timezone }, tx));
+    // Conflict check and insert run under a per-target lock, so two overlapping requests can't both pass the check.
+    const s = await changeContent(companyId, target, async (tx) => {
+      await repo.lockTarget(body.targetKind, body.targetId, tx);
+      await assertNoConflict(companyId, body.targetKind, body.targetId, startsAt, endsAt, undefined, tx);
+      return repo.create({ companyId, playlistId: body.playlistId, targetKind: body.targetKind, targetId: body.targetId, startsAt, endsAt, timezone: body.timezone }, tx);
+    });
     await logActivity({ companyId, actor, action: "schedule.created", resourceType: "schedule", resourceId: s.id, summary: `"${s.playlist.name}" scheduled for ${await repo.targetName(s.targetKind, s.targetId)}` });
     await notifyTarget(s.targetKind, s.targetId);
     return toDto(s);
@@ -60,12 +79,15 @@ export const schedulesService = {
     if (!existing) throw new NotFoundError("Schedule");
     // The playlist must belong to the schedule's company; IDs never cross tenants (spec 3.1).
     if (body.playlistId && !(await prisma.playlist.count({ where: { id: body.playlistId, companyId: existing.companyId } }))) throw new ValidationError("Playlist not found", undefined, "PLAYLIST_NOT_FOUND");
+    if (body.playlistId && body.playlistId !== existing.playlistId) await assertNotEmpty(body.playlistId);
     const startsAt = body.startsAt ? new Date(body.startsAt) : existing.startsAt;
     const endsAt = body.endsAt === undefined ? existing.endsAt : body.endsAt ? new Date(body.endsAt) : null;
     if (endsAt && endsAt <= startsAt) throw new ValidationError("endsAt must be after startsAt", undefined, "INVALID_WINDOW");
-    const conflicts = await repo.overlapping(existing.companyId, existing.targetKind, existing.targetId, startsAt, endsAt, id);
-    if (conflicts.length) throw new ConflictError("This schedule overlaps an existing schedule on the same target", "SCHEDULE_CONFLICT", { conflicts: conflicts.map((r) => ({ scheduleId: r.id, playlistName: r.playlist.name })) });
-    const s = await changeContent(existing.companyId, { scheduleIds: [id] }, (tx) => repo.update(id, { playlistId: body.playlistId, startsAt, endsAt, timezone: body.timezone }, tx));
+    const s = await changeContent(existing.companyId, { scheduleIds: [id] }, async (tx) => {
+      await repo.lockTarget(existing.targetKind, existing.targetId, tx);
+      await assertNoConflict(existing.companyId, existing.targetKind, existing.targetId, startsAt, endsAt, id, tx);
+      return repo.update(id, { playlistId: body.playlistId, startsAt, endsAt, timezone: body.timezone }, tx);
+    });
     await logActivity({ companyId: existing.companyId, actor, action: "schedule.updated", resourceType: "schedule", resourceId: id, summary: `Schedule for ${await repo.targetName(s.targetKind, s.targetId)} updated` });
     await notifyTarget(s.targetKind, s.targetId);
     return toDto(s);
