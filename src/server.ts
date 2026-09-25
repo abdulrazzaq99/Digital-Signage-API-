@@ -5,6 +5,8 @@ import { disconnectDatabase } from "./core/db/prisma.js";
 import { logger } from "./core/middleware/logger.js";
 import { closeRealtime, initRealtime } from "./core/realtime/server.js";
 import { closeRedis } from "./core/redis/client.js";
+import { installProcessHandlers } from "./core/process.js";
+import { closeQueue } from "./core/queue/queues.js";
 
 const app = createApp();
 const server = createServer(app);
@@ -14,16 +16,9 @@ server.listen(env.PORT, () => {
   logger.info({ port: env.PORT, env: env.NODE_ENV }, "API listening");
 });
 
-async function shutdown(signal: string): Promise<void> {
-  logger.info({ signal }, "Shutting down");
-  server.close();
+installProcessHandlers("API", async () => {
+  // io.close() disconnects sockets and closes the HTTP server; idle keep-alive sockets are dropped.
   await closeRealtime();
-  await Promise.allSettled([disconnectDatabase(), closeRedis()]);
-  process.exit(0);
-}
-
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
-process.on("unhandledRejection", (err) => {
-  logger.error({ err }, "Unhandled rejection");
+  server.closeIdleConnections();
+  await Promise.allSettled([closeQueue(), disconnectDatabase(), closeRedis()]);
 });

@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import type { ZodType } from "zod";
+import { z, type ZodType } from "zod";
 import { ValidationError } from "../errors/AppError.js";
 
 export interface ValidationSchemas {
@@ -14,13 +14,18 @@ declare module "express-serve-static-core" {
   }
 }
 
-/** Validates body, query, and params with Zod. Parsed values land on `req.validated`. */
+/**
+ * Validates body, query, and params with Zod. Parsed values land on `req.validated`.
+ * Object bodies are strict: an unknown key (usually a typo or a stale client) is a 400, not
+ * silently dropped. Query strings stay lenient so cache-busting parameters don't break requests.
+ */
 export function validate(schemas: ValidationSchemas): RequestHandler {
+  const parts: ValidationSchemas = { ...schemas, body: schemas.body instanceof z.ZodObject ? schemas.body.strict() : schemas.body };
   return (req, _res, next) => {
     const issues: { path: string; message: string }[] = [];
     const out: Record<string, unknown> = { body: req.body, query: req.query, params: req.params };
     for (const part of ["body", "query", "params"] as const) {
-      const schema = schemas[part];
+      const schema = parts[part];
       if (!schema) continue;
       const result = schema.safeParse(req[part]);
       if (result.success) out[part] = result.data;

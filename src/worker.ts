@@ -2,6 +2,7 @@ import { env } from "./config/env.js";
 import { disconnectDatabase } from "./core/db/prisma.js";
 import { logger } from "./core/middleware/logger.js";
 import { closeRedis } from "./core/redis/client.js";
+import { installProcessHandlers } from "./core/process.js";
 import { MEDIA_CLEANUP_INTERVAL_MS, PRESENCE_SWEEP_INTERVAL_MS } from "./config/constants.js";
 import { presenceSweep } from "./jobs/presence.sweep.js";
 import { mediaCleanup } from "./jobs/media.cleanup.js";
@@ -30,23 +31,23 @@ const worker = new Worker(
       case JobNames.mailSend:
         return mailSend(job.data as MailMessage);
       default:
-        logger.warn({ name: job.name }, "unknown job");
+        // Fail it (visible in the failed set) rather than completing a job nothing processed.
+        throw new Error(`Unknown job: ${job.name}`);
     }
   },
   { connection: createRedisConnection(), concurrency: 4 },
 );
-worker.on("failed", (job, err) => logger.error({ err, job: job?.name, id: job?.id }, "job failed"));
+worker.on("failed", (job, err) => logger.error({ err, job: job?.name, id: job?.id, attempt: job?.attemptsMade }, "job failed"));
+// Connection and processor errors outside a job; without a listener they would be unhandled.
+worker.on("error", (err) => logger.error({ err }, "worker error"));
 worker.on("completed", (job) => logger.debug({ job: job.name, id: job.id }, "job completed"));
 
 const sweep = setInterval(() => void presenceSweep().catch((err) => logger.error({ err }, "presence sweep failed")), PRESENCE_SWEEP_INTERVAL_MS);
 const cleanup = setInterval(() => void mediaCleanup().catch((err) => logger.error({ err }, "media cleanup failed")), MEDIA_CLEANUP_INTERVAL_MS);
 
-async function shutdown(): Promise<void> {
+installProcessHandlers("Worker", async () => {
   clearInterval(sweep);
   clearInterval(cleanup);
   await worker.close();
   await Promise.allSettled([disconnectDatabase(), closeRedis()]);
-  process.exit(0);
-}
-process.on("SIGTERM", () => void shutdown());
-process.on("SIGINT", () => void shutdown());
+});
