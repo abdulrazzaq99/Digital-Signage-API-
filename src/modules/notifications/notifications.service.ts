@@ -2,10 +2,10 @@ import type { z } from "zod";
 import { logActivity } from "../../core/audit/activity.js";
 import type { AuthUser, TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
-import { ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
 import { enqueue, JobNames } from "../../core/queue/queues.js";
-import type { Notification, Prisma } from "../../generated/prisma/client.js";
+import { Prisma, type Notification } from "../../generated/prisma/client.js";
 import type { createNotificationBody, listNotificationsQuery, subscribeBody } from "./notifications.schemas.js";
 
 function toDto(n: Notification) {
@@ -79,9 +79,31 @@ export const notificationsService = {
     return toInboxDto(n);
   },
 
+  /**
+   * Registers the caller's push subscription, or refreshes it when they already own it. A
+   * subscription ID belonging to another user is never moved over (409 SUBSCRIPTION_TAKEN): that
+   * user must unsubscribe first (the app does it on sign-out).
+   */
   async subscribe(actor: AuthUser, body: z.infer<typeof subscribeBody>) {
-    const sub = await prisma.pushSubscription.upsert({ where: { externalId: body.externalId }, update: { userId: actor.id, companyId: actor.companyId, platform: body.platform }, create: { userId: actor.id, companyId: actor.companyId, externalId: body.externalId, platform: body.platform } });
-    return { id: sub.id, externalId: sub.externalId };
+    const taken = () => new ConflictError("This push subscription belongs to another account", "SUBSCRIPTION_TAKEN");
+    const existing = await prisma.pushSubscription.findUnique({ where: { externalId: body.externalId } });
+    if (existing && existing.userId !== actor.id) throw taken();
+    if (existing) {
+      const sub = await prisma.pushSubscription.update({ where: { id: existing.id }, data: { companyId: actor.companyId, platform: body.platform } });
+      return { id: sub.id, externalId: sub.externalId };
+    }
+    try {
+      const sub = await prisma.pushSubscription.create({ data: { userId: actor.id, companyId: actor.companyId, externalId: body.externalId, platform: body.platform } });
+      return { id: sub.id, externalId: sub.externalId };
+    } catch (err) {
+      // Registered by someone else between the read and the insert.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        const winner = await prisma.pushSubscription.findUnique({ where: { externalId: body.externalId } });
+        if (winner?.userId === actor.id) return { id: winner.id, externalId: winner.externalId };
+        throw taken();
+      }
+      throw err;
+    }
   },
 
   async unsubscribe(actor: AuthUser, id: string) {
