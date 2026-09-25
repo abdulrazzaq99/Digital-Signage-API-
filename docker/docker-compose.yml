@@ -106,6 +106,8 @@ services:
     build: { context: .., dockerfile: docker/Dockerfile }
     environment: *api-env
     command: ["node", "dist/src/worker.js"]
+    # The image's HEALTHCHECK probes the API's HTTP port, which the worker doesn't serve.
+    healthcheck: { disable: true }
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
