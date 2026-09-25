@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { OFFER_VIEW_WINDOW_MIN } from "../../config/constants.js";
+import { assertImageKey } from "../../core/assignments/refs.js";
 import { logActivity } from "../../core/audit/activity.js";
 import type { AuthUser, TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
@@ -55,6 +56,7 @@ export const offersService = {
 
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createOfferBody>) {
     requirePlatform(scope);
+    if (body.imageKey) await assertImageKey(body.imageKey, scope.companyId, "body.imageKey");
     const o = await prisma.offer.create({ data: { ...body, startsAt: body.startsAt ? new Date(body.startsAt) : null, endsAt: body.endsAt ? new Date(body.endsAt) : null } });
     await logActivity({ actor, action: "offer.created", resourceType: "offer", resourceId: o.id, summary: `Offer "${o.title}" created as draft` });
     return toDto(o, true);
@@ -64,6 +66,7 @@ export const offersService = {
     requirePlatform(scope);
     const existing = await prisma.offer.findUnique({ where: { id } });
     if (!existing) throw new NotFoundError("Offer");
+    if (body.imageKey && body.imageKey !== existing.imageKey) await assertImageKey(body.imageKey, scope.companyId, "body.imageKey");
     const o = await prisma.offer.update({ where: { id }, data: { ...body, startsAt: body.startsAt === undefined ? undefined : body.startsAt ? new Date(body.startsAt) : null, endsAt: body.endsAt === undefined ? undefined : body.endsAt ? new Date(body.endsAt) : null } });
     await logActivity({ actor, action: "offer.updated", resourceType: "offer", resourceId: id, summary: `Offer "${o.title}" updated${existing.status === "PUBLISHED" ? " while live" : ""}` });
     return toDto(o, true);

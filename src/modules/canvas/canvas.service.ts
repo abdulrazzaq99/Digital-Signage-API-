@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { CANVAS_ACTIVATE_DELAY_MS } from "../../config/constants.js";
 import { changeContent } from "../../core/assignments/content.js";
 import { publishAssignment } from "../../core/assignments/publish.js";
+import { assertContentInCompany } from "../../core/assignments/refs.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
@@ -62,6 +63,8 @@ export const canvasService = {
     const companyId = requireCompanyId(scope);
     await findScoped(companyId, id);
     if (body.screenIds) await validateMembers(companyId, body.screenIds, id);
+    // Content is referenced by ID only; it must be this company's (players load it by this ID).
+    if (body.content) await assertContentInCompany(companyId, body.content.kind, body.content.refId, "body.content.refId");
     const reconfigured = !!body.screenIds || body.content !== undefined;
     // Changing members or content returns the canvas to draft: it leaves the screens and must be
     // activated again. Either way the screens showing it get a new manifest version.

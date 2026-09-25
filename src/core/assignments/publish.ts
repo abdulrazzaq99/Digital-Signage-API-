@@ -5,6 +5,7 @@ import { ForbiddenError, ValidationError } from "../errors/AppError.js";
 import { Events } from "../realtime/events.js";
 import { emitToCompany, emitToScreen } from "../realtime/server.js";
 import type { AssignmentKind } from "../../generated/prisma/enums.js";
+import { assertGroupsInCompany } from "./refs.js";
 
 export interface PublishTarget {
   screenIds?: string[];
@@ -26,6 +27,8 @@ export async function publishAssignment(input: { actor: AuthUser; companyId: str
     const license = await tx.license.findUnique({ where: { companyId: input.companyId } });
     if (!license || license.state !== "ACTIVE") throw new ForbiddenError(`Publishing is blocked while the licence is ${license?.state.toLowerCase() ?? "missing"}`, "LICENSE_SUSPENDED");
 
+    // A group of another company would otherwise just resolve to no screens.
+    await assertGroupsInCompany(input.companyId, input.target.groupIds ?? [], "body.groupIds", tx);
     const groupScreenIds = input.target.groupIds?.length
       ? (await tx.screenGroupMember.findMany({ where: { groupId: { in: input.target.groupIds }, group: { companyId: input.companyId } }, select: { screenId: true } })).map((m) => m.screenId)
       : [];

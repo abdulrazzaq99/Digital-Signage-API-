@@ -29,6 +29,21 @@ function addressedTo(user: AuthUser): Prisma.NotificationWhereInput {
   };
 }
 
+/** Every company or user the audience names must exist; a typo would otherwise silently reach nobody. */
+async function assertAudienceExists(audience: z.infer<typeof createNotificationBody>["audience"]) {
+  if (audience.kind === "all") return;
+  const ids = [...new Set(audience.kind === "companies" ? audience.companyIds : audience.userIds)];
+  const found = new Set(
+    audience.kind === "companies"
+      ? (await prisma.company.findMany({ where: { id: { in: ids } }, select: { id: true } })).map((c) => c.id)
+      : (await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true } })).map((u) => u.id),
+  );
+  const field = audience.kind === "companies" ? "companyIds" : "userIds";
+  const all = audience.kind === "companies" ? audience.companyIds : audience.userIds;
+  const issues = all.flatMap((id, i) => (found.has(id) ? [] : [{ path: `body.audience.${field}.${i}`, message: audience.kind === "companies" ? "Company not found" : "User not found" }]));
+  if (issues.length) throw new ValidationError("Audience contains unknown recipients", issues, "AUDIENCE_NOT_FOUND");
+}
+
 export const notificationsService = {
   async list(scope: TenantScope, q: z.infer<typeof listNotificationsQuery>) {
     if (scope.kind !== "platform") throw new ForbiddenError("Only the Super Admin can view sent notifications", "PLATFORM_ONLY");
@@ -43,6 +58,7 @@ export const notificationsService = {
     const targetId = body.type === "announcement" ? null : body.targetId!;
     if (body.type === "offer" && !(await prisma.offer.count({ where: { id: targetId! } }))) throw new ValidationError("Offer not found", undefined, "TARGET_NOT_FOUND");
     if (body.type === "campaign" && !(await prisma.scratchCampaign.count({ where: { id: targetId! } }))) throw new ValidationError("Campaign not found", undefined, "TARGET_NOT_FOUND");
+    await assertAudienceExists(body.audience);
     const n = await prisma.notification.create({ data: { title: body.title, body: body.body, type: body.type, targetId, audience: body.audience, deepLink: body.deepLink, scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null } });
     const delay = n.scheduledAt ? Math.max(0, n.scheduledAt.getTime() - Date.now()) : 0;
     await enqueue(JobNames.notificationSend, { notificationId: n.id }, { delay });

@@ -1,5 +1,6 @@
 import { prisma } from "../../core/db/prisma.js";
 import type { Tx } from "../../core/db/transaction.js";
+import { ValidationError } from "../../core/errors/AppError.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 
 export const playlistInclude = {
@@ -21,6 +22,9 @@ export const playlistsRepository = {
    */
   syncItems: async (playlistId: string, items: { id?: string; assetId: string; durationSec: number; page?: number | null }[], tx: Tx) => {
     const keep = items.map((i) => i.id).filter((id): id is string => !!id);
+    // Item IDs are only ever this playlist's own; never touch a row of another playlist (or tenant).
+    const own = keep.length ? await tx.playlistItem.count({ where: { playlistId, id: { in: keep } } }) : 0;
+    if (own !== new Set(keep).size) throw new ValidationError("One or more items do not belong to this playlist", undefined, "ITEM_NOT_FOUND");
     await tx.playlistItem.deleteMany({ where: { playlistId, ...(keep.length ? { id: { notIn: keep } } : {}) } });
     for (const id of keep) await tx.playlistItem.update({ where: { id }, data: { position: -1 - keep.indexOf(id) } });
     for (const [position, it] of items.entries()) {

@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { assertImageKey } from "../../core/assignments/refs.js";
 import { logActivity } from "../../core/audit/activity.js";
 import type { AuthUser, TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
@@ -74,6 +75,7 @@ export const campaignsService = {
 
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createCampaignBody>) {
     requirePlatform(scope);
+    if (body.artworkKey) await assertImageKey(body.artworkKey, scope.companyId, "body.artworkKey");
     const c = await withTransaction(async (tx) => {
       const created = await tx.scratchCampaign.create({ data: { title: body.title, description: body.description, status: body.activate ? "ACTIVE" : "DRAFT", startsAt: new Date(body.startsAt), endsAt: new Date(body.endsAt), maxAttempts: body.maxAttempts, requireOffersVisit: body.requireOffersVisit, artworkKey: body.artworkKey, allocation: { loseWeight: body.loseWeight, prizes: [] }, prizes: { create: body.prizes.map((p) => ({ name: p.name, value: p.value, quantity: p.quantity, remaining: p.quantity })) } }, include });
       const allocation: Allocation = { loseWeight: body.loseWeight, prizes: created.prizes.map((p, i) => ({ prizeId: p.id, weight: body.prizes[i]!.weight })) };
@@ -86,6 +88,7 @@ export const campaignsService = {
   async update(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updateCampaignBody>) {
     requirePlatform(scope);
     const existing = await findCampaign(id);
+    if (body.artworkKey && body.artworkKey !== existing.artworkKey) await assertImageKey(body.artworkKey, scope.companyId, "body.artworkKey");
     const startsAt = body.startsAt ? new Date(body.startsAt) : existing.startsAt;
     const endsAt = body.endsAt ? new Date(body.endsAt) : existing.endsAt;
     if (endsAt <= startsAt) throw new ValidationError("endsAt must be after startsAt", undefined, "INVALID_WINDOW");

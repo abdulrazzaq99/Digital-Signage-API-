@@ -77,15 +77,18 @@ function playable(rows: { asset: AssetRow; page?: number | null; durationSec: nu
 const ZONE_MEDIA_SEC = 10;
 const TEMPLATE_SEC = 15;
 
-/** Resolves a playlist, layout or template instance to playable items, collecting its files. */
-async function loadContent(tx: Tx, kind: AssignmentKind, refId: string, files: Map<string, FileRef>): Promise<Content | null> {
+/**
+ * Resolves a playlist, layout or template instance to playable items, collecting its files. Pinned
+ * to the screen's company, so a stale or forged reference never loads another tenant's content.
+ */
+async function loadContent(tx: Tx, companyId: string, kind: AssignmentKind, refId: string, files: Map<string, FileRef>): Promise<Content | null> {
   const use = (f: FileRef) => (files.set(f.id, f), f.id);
   if (kind === "PLAYLIST") {
-    const p = await tx.playlist.findUnique({ where: { id: refId }, include: itemsInclude });
+    const p = await tx.playlist.findFirst({ where: { id: refId, companyId }, include: itemsInclude });
     return p && { name: p.name, items: playable(p.items, files), layout: null };
   }
   if (kind === "LAYOUT") {
-    const l = await tx.layout.findUnique({ where: { id: refId }, include: { zones: { orderBy: { index: "asc" }, include: { asset: { select: assetSelect }, playlist: { include: itemsInclude } } } } });
+    const l = await tx.layout.findFirst({ where: { id: refId, companyId, isPreset: false }, include: { zones: { orderBy: { index: "asc" }, include: { asset: { select: assetSelect }, playlist: { include: itemsInclude } } } } });
     if (!l) return null;
     const zones = l.zones.map((z) => ({
       index: z.index, name: z.name, x: z.x, y: z.y, w: z.w, h: z.h, bindingKind: z.bindingKind, refId: z.assetId ?? z.playlistId,
@@ -94,7 +97,7 @@ async function loadContent(tx: Tx, kind: AssignmentKind, refId: string, files: M
     return { name: l.name, items: [], layout: { presetId: l.presetId, zones } };
   }
   if (kind === "TEMPLATE_INSTANCE") {
-    const t = await tx.templateInstance.findUnique({ where: { id: refId } });
+    const t = await tx.templateInstance.findFirst({ where: { id: refId, companyId } });
     if (!t) return null;
     // The rendered output is addressed by the instance ID; a re-render bumps the version and the checksum.
     const items = t.outputKey ? [{ assetId: use({ id: t.id, type: "IMAGE", mimeType: t.outputMimeType ?? "image/png", storageKey: t.outputKey, checksum: t.outputChecksum, sizeBytes: t.outputSizeBytes ?? 0, width: t.outputWidth, height: t.outputHeight, durationSec: null }), position: 0, durationSec: TEMPLATE_SEC }] : [];
@@ -116,7 +119,7 @@ export async function buildManifest(screenId: string) {
       if (!screen) throw new NotFoundError("Screen");
       const groupIds = (await tx.screenGroupMember.findMany({ where: { screenId }, select: { groupId: true } })).map((g) => g.groupId);
       const schedules = await tx.schedule.findMany({
-        where: { AND: [{ OR: [{ targetKind: "SCREEN", targetId: screenId }, { targetKind: "GROUP", targetId: { in: groupIds } }] }, liveSchedules()] },
+        where: { AND: [{ companyId: screen.companyId }, { OR: [{ targetKind: "SCREEN", targetId: screenId }, { targetKind: "GROUP", targetId: { in: groupIds } }] }, liveSchedules()] },
         include: { playlist: { include: itemsInclude } },
         orderBy: { startsAt: "asc" },
       });
@@ -126,18 +129,18 @@ export async function buildManifest(screenId: string) {
       let canvas: { setId: string; position: number; total: number; activateAt: string | null; viewport: { x: number; y: number; width: number; height: number }; content: { kind: AssignmentKind; refId: string } | null } | null = null;
       const a = screen.assignment;
       if (a?.kind === "CANVAS") {
-        const set = await tx.canvasSet.findUnique({ where: { id: a.refId }, include: { members: { select: { screenId: true, position: true }, orderBy: { position: "asc" } } } });
+        const set = await tx.canvasSet.findFirst({ where: { id: a.refId, companyId: screen.companyId }, include: { members: { select: { screenId: true, position: true }, orderBy: { position: "asc" } } } });
         const member = set?.members.find((m) => m.screenId === screenId);
         if (set && member) {
           assignment = { kind: "CANVAS", refId: set.id, name: set.name };
-          if (set.contentKind && set.contentRef && set.contentKind !== "CANVAS") content = await loadContent(tx, set.contentKind, set.contentRef, files);
+          if (set.contentKind && set.contentRef && set.contentKind !== "CANVAS") content = await loadContent(tx, screen.companyId, set.contentKind, set.contentRef, files);
           // Members sit left to right in position order; each shows its slice of the full composition.
           const total = set.members.length;
           const slot = set.members.indexOf(member);
           canvas = { setId: set.id, position: member.position, total, activateAt: set.activateAt?.toISOString() ?? null, viewport: { x: slot / total, y: 0, width: 1 / total, height: 1 }, content: set.contentKind && set.contentRef ? { kind: set.contentKind, refId: set.contentRef } : null };
         }
       } else if (a) {
-        content = await loadContent(tx, a.kind, a.refId, files);
+        content = await loadContent(tx, screen.companyId, a.kind, a.refId, files);
         if (content) assignment = { kind: a.kind, refId: a.refId, name: content.name };
       }
 
