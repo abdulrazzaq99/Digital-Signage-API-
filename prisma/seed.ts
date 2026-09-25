@@ -35,7 +35,7 @@ async function main(): Promise<void> {
     { code: "00006", name: "Metro Fashion", status: "ACTIVE", license: "ACTIVE", limit: 15 },
     { code: "00007", name: "Skyline Gym", status: "ACTIVE", license: "EXPIRED", limit: 12 },
     { code: "00008", name: "Sunrise Hotels", status: "ACTIVE", license: "ACTIVE", limit: 5 },
-    { code: "00009", name: "Acme Corp", status: "ACTIVE", license: "ACTIVE", limit: 10, website: "https://acmecorp.com", phone: "+44 20 7946 0000", plan: "Platform Pro" },
+    { code: "00009", name: "Acme Corp", status: "ACTIVE", license: "ACTIVE", limit: 10, website: "https://acmecorp.com", phone: "+442079460000", plan: "Platform Pro" },
   ] as const;
 
   const byCode: Record<string, string> = {};
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
   // ---- Acme Corp users (customer portal sample data) ----
   const acme = byCode["00009"]!;
   const users = [
-    { email: "sarah.mitchell@acmecorp.com", name: "Sarah Mitchell", role: "ADMIN", title: "Marketing Director", phone: "+44 7700 900 147" },
+    { email: "sarah.mitchell@acmecorp.com", name: "Sarah Mitchell", role: "ADMIN", title: "Marketing Director", phone: "+447400123147" },
     { email: "james.pearson@acmecorp.com", name: "James Pearson", role: "EDITOR" },
     { email: "lucy.chen@acmecorp.com", name: "Lucy Chen", role: "VIEWER" },
     { email: "marcus.webb@acmecorp.com", name: "Marcus Webb", role: "EDITOR", invited: true },
@@ -178,7 +178,7 @@ async function main(): Promise<void> {
   }
 
   // ---- Offers ----
-  const contact = { name: "James Whitfield", role: "Account Manager", email: "j.whitfield@signageplatform.com", phone: "+44 20 7946 0112" };
+  const contact = { name: "James Whitfield", role: "Account Manager", email: "j.whitfield@signageplatform.com", phone: "+442079460112" };
   const offers = [
     { title: "Commercial Display Upgrade Programme", category: "Hardware", summary: "Trade in your existing screens and upgrade to 4K commercial-grade displays at preferential pricing.", included: ["4K UHD · 500 nit brightness", "24/7 continuous operation rating", "3-year on-site warranty", "Trade-in credit available"], steps: ["Contact your account manager to request a site assessment and trade-in valuation.", "Your account manager will send a formal quotation within 2 business days.", "Confirm your order and arrange a convenient installation date.", "Our certified engineers will install and configure your new displays."] },
     { title: "ProPlayer 4 Media Player Bundle", category: "Hardware", summary: "Get our latest 4K media player pre-configured for your account, with three months of priority support included.", included: ["4K60 HDR output", "Pre-paired to your account", "Mounting kit and cabling", "3 months priority support"], steps: ["Tell your account manager how many players you need.", "Receive a quotation within 2 business days.", "Confirm and choose delivery dates per site.", "Plug in, power on, and your content plays."] },

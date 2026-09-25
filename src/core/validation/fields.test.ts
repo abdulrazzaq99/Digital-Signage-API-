@@ -22,10 +22,11 @@ describe("field building blocks", () => {
     for (const bad of ["", "1", "abc", "cmu418w8h000d01lfllymhxg0; DROP", "x".repeat(500)]) expect(ok(id(), bad).success).toBe(false);
   });
 
-  it("phone strips formatting and accepts international or local numbers", () => {
+  it("phone strips formatting and accepts numbers valid for their country code", () => {
     expect(phone().parse("+44 20 7946-0000")).toBe("+442079460000");
-    expect(phone().parse("(020) 7946 0000")).toBe("02079460000");
-    for (const bad of ["12345", "+0 123 456 789", "call me", "+44 20 7946 0000 ext 5"]) expect(ok(phone(), bad).success).toBe(false);
+    expect(phone().parse("+92 300 1234567")).toBe("+923001234567");
+    // No country code (ambiguous), too short for the country, reserved ranges, junk.
+    for (const bad of ["(020) 7946 0000", "+92300", "+447700900123", "12345", "+0 123 456 789", "call me", "+44 20 7946 0000 ext 5"]) expect(ok(phone(), bad).success).toBe(false);
   });
 
   it("url only allows http(s) with a real host", () => {

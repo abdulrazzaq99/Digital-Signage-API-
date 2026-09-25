@@ -4,6 +4,7 @@
  * limits live in one place and the web dashboards can mirror them.
  */
 import { z } from "zod";
+import { isValidPhoneNumber } from "libphonenumber-js";
 import { COMMON_PASSWORDS } from "./common-passwords.js";
 
 /** Trimmed text between `min` and `max` characters. `min` defaults to 1, so blank strings fail. */
@@ -57,8 +58,9 @@ export const id = () => z.string().regex(/^c[a-z0-9]{20,31}$/, "Invalid id");
 export const slug = (max = 60) => z.string().trim().max(max).regex(/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/, "Use lowercase letters, numbers, - or _");
 
 /**
- * Phone number. Spaces, dashes, dots and brackets are stripped; the result must be an international
- * number (+ and 7-15 digits) or a local one starting with 0.
+ * Phone number in international form. Spaces, dashes, dots and brackets are stripped, and the result
+ * must be a valid number for its country (libphonenumber rules), stored as E.164: +442079460000.
+ * A local number without a country code is ambiguous, so it is refused.
  */
 export const phone = () =>
   z
@@ -66,7 +68,12 @@ export const phone = () =>
     .trim()
     .max(40)
     .transform((v) => v.replace(/[\s\-().]/g, ""))
-    .pipe(z.string().regex(/^(\+[1-9]\d{6,14}|0\d{6,14})$/, "Enter a valid phone number, e.g. +44 20 7946 0000"));
+    .pipe(
+      z
+        .string()
+        .regex(/^\+\d{7,15}$/, "Include the country code, e.g. +44 20 7946 0000")
+        .refine((v) => isValidPhoneNumber(v), "Enter a valid phone number for the country code"),
+    );
 
 /** http(s) URL only, so `javascript:` and `data:` links can never be stored. */
 export const url = (max = 2048) =>
