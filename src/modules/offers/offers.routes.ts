@@ -14,6 +14,7 @@ offersRouter.get("/:id", authorize(), validate({ params: idParams }), asyncHandl
 offersRouter.patch("/:id", authorize({ platformOnly: true }), validate({ params: idParams, body: updateOfferBody }), asyncHandler(c.update));
 offersRouter.post("/:id/publish", authorize({ platformOnly: true }), validate({ params: idParams }), asyncHandler(c.publish));
 offersRouter.post("/:id/unpublish", authorize({ platformOnly: true }), validate({ params: idParams }), asyncHandler(c.unpublish));
-offersRouter.post("/:id/view", authorize(), validate({ params: idParams }), asyncHandler(c.view));
+// Recording a view changes nothing the company owns; it stays open in read-only mode.
+offersRouter.post("/:id/view", authorize({ allowReadOnly: true }), validate({ params: idParams }), asyncHandler(c.view));
 offersRouter.get("/:id/stats", authorize({ platformOnly: true }), validate({ params: idParams }), asyncHandler(c.stats));
 offersRouter.delete("/:id", authorize({ platformOnly: true }), validate({ params: idParams }), asyncHandler(c.remove));

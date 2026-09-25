@@ -13,7 +13,7 @@ export const schedulesRouter = Router();
 schedulesRouter.use(authenticate());
 schedulesRouter.get("/", authorize(), validate({ query: listSchedulesQuery }), asyncHandler(c.list));
 schedulesRouter.get("/active", authorize(), validate({ query: activeQuery }), asyncHandler(c.active));
-schedulesRouter.post("/check-conflicts", authorize(), validate({ body: checkConflictsBody }), asyncHandler(c.checkConflicts));
+schedulesRouter.post("/check-conflicts", authorize({ allowReadOnly: true }), validate({ body: checkConflictsBody }), asyncHandler(c.checkConflicts));
 schedulesRouter.post("/", authorize({ roles: [...editors] }), idempotency(), validate({ body: createScheduleBody }), asyncHandler(c.create));
 schedulesRouter.patch("/:id", authorize({ roles: [...editors] }), validate({ params: idParams, body: updateScheduleBody }), asyncHandler(c.update));
 schedulesRouter.delete("/:id", authorize({ roles: [...editors] }), validate({ params: idParams }), asyncHandler(c.remove));

@@ -1,5 +1,6 @@
-import type { RequestHandler } from "express";
+import type { Request, RequestHandler } from "express";
 import { COMPANY_HEADER } from "../../config/constants.js";
+import { READ_ONLY_MESSAGES } from "../auth/account.js";
 import { scopeFor, type TenantScope } from "../auth/scope.js";
 import { ForbiddenError, UnauthorizedError } from "../errors/AppError.js";
 import type { CompanyRole } from "../../generated/prisma/enums.js";
@@ -15,10 +16,37 @@ interface AuthorizeOptions {
   roles?: CompanyRole[];
   /** Only the Super Admin may call. */
   platformOnly?: boolean;
+  /** A POST that changes nothing the company owns (a conflict check, an offer view); allowed while read-only. */
+  allowReadOnly?: boolean;
+}
+
+const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Refuses changes from a company that is suspended, inactive or whose licence has lapsed: its users
+ * can read but not write (403 COMPANY_READ_ONLY). The Super Admin is never blocked, since they are
+ * the one who manages the company. The reason was loaded once by authenticate().
+ */
+export function assertWritable(req: Request): void {
+  if (!MUTATING.has(req.method) || req.user?.platformRole === "SUPER_ADMIN") return;
+  const reason = req.readOnlyReason;
+  if (reason) throw new ForbiddenError(READ_ONLY_MESSAGES[reason], "COMPANY_READ_ONLY");
+}
+
+/** The read-only check as a standalone middleware, for routes that don't use authorize(). */
+export function requireWritableCompany(): RequestHandler {
+  return (req, _res, next) => {
+    try {
+      assertWritable(req);
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
 }
 
 /**
- * Resolves the tenant scope for the request and enforces role rules.
+ * Resolves the tenant scope for the request and enforces role rules and read-only mode.
  * Super Admin may target a company via the X-Company-Id header or `companyId` query.
  */
 export function authorize(opts: AuthorizeOptions = {}): RequestHandler {
@@ -32,6 +60,7 @@ export function authorize(opts: AuthorizeOptions = {}): RequestHandler {
       }
       const requested = req.header(COMPANY_HEADER) ?? (typeof req.query.companyId === "string" ? req.query.companyId : undefined);
       req.scope = scopeFor(req.user, requested);
+      if (!opts.allowReadOnly) assertWritable(req);
       next();
     } catch (err) {
       next(err);

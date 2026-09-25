@@ -2,7 +2,9 @@ import argon2 from "argon2";
 import { nanoid } from "nanoid";
 import { PASSWORD_RESET_TTL_SEC, REFRESH_REUSE_GRACE_SEC } from "../../config/constants.js";
 import { env } from "../../config/env.js";
+import { readOnlyReason, type CompanyStanding } from "../../core/auth/account.js";
 import type { AuthUser } from "../../core/auth/scope.js";
+import { seal, unseal } from "../../core/auth/seal.js";
 import { randomToken, sha256, signAccess, signRefresh, ttlToMs, verifyRefresh } from "../../core/auth/tokens.js";
 import { ForbiddenError, UnauthorizedError, ValidationError } from "../../core/errors/AppError.js";
 import { queueMail } from "../../core/mail/index.js";
@@ -23,11 +25,13 @@ export function toAuthUser(u: User): AuthUser {
   return { id: u.id, email: u.email, name: u.name, platformRole: u.platformRole, companyRole: u.companyRole, companyId: u.companyId };
 }
 
-export function toDto(u: User) {
-  return { id: u.id, email: u.email, name: u.name, platformRole: u.platformRole, companyRole: u.companyRole, companyId: u.companyId, title: u.title, phone: u.phone };
+type UserWithStanding = User & { company: CompanyStanding | null };
+
+export function toDto(u: UserWithStanding) {
+  return { id: u.id, email: u.email, name: u.name, platformRole: u.platformRole, companyRole: u.companyRole, companyId: u.companyId, title: u.title, phone: u.phone, readOnlyReason: u.platformRole === "SUPER_ADMIN" ? null : readOnlyReason(u.company) };
 }
 
-async function issueTokens(user: User, familyId: string, meta?: { userAgent?: string; ip?: string }): Promise<TokenPair> {
+async function issueTokens(user: UserWithStanding, familyId: string, meta?: { userAgent?: string; ip?: string }): Promise<TokenPair> {
   const jti = nanoid(21);
   const refreshToken = signRefresh(user.id, jti, familyId);
   await repo.createRefreshToken({ userId: user.id, tokenHash: sha256(refreshToken), familyId, expiresAt: new Date(Date.now() + ttlToMs(env.JWT_REFRESH_TTL)), ...meta });
@@ -51,7 +55,8 @@ export const refreshGraceKey = (tokenHash: string) => `refresh:grace:${tokenHash
 async function reuseOrGrace(tokenHash: string, familyId: string, userId: string, rotatedAt: Date): Promise<TokenPair> {
   const recent = Date.now() - rotatedAt.getTime() < 3000;
   for (let i = 0; i < (recent ? 20 : 1); i++) {
-    const cached = await redis.get(refreshGraceKey(tokenHash));
+    const stored = await redis.get(refreshGraceKey(tokenHash));
+    const cached = stored ? unseal(stored, tokenHash) : null;
     if (cached) {
       if (await repo.familyIsActive(familyId)) return JSON.parse(cached) as TokenPair;
       break;
@@ -89,7 +94,8 @@ export const authService = {
     if (!user || !user.isActive) throw new UnauthorizedError("Account unavailable", "ACCOUNT_DISABLED");
     const pair = await issueTokens(user, stored.familyId, meta);
     await repo.setReplacedBy(stored.id, sha256(pair.refreshToken));
-    await redis.set(refreshGraceKey(hash), JSON.stringify(pair), "EX", REFRESH_REUSE_GRACE_SEC);
+    // The pair includes a live refresh token, so it is stored encrypted and bound to the old token's hash.
+    await redis.set(refreshGraceKey(hash), seal(JSON.stringify(pair), hash), "EX", REFRESH_REUSE_GRACE_SEC);
     return pair;
   },
 

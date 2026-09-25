@@ -3,7 +3,8 @@ import { disconnectDatabase } from "./core/db/prisma.js";
 import { logger } from "./core/middleware/logger.js";
 import { closeRedis } from "./core/redis/client.js";
 import { installProcessHandlers } from "./core/process.js";
-import { MEDIA_CLEANUP_INTERVAL_MS, PRESENCE_SWEEP_INTERVAL_MS } from "./config/constants.js";
+import { EXPIRY_SWEEP_INTERVAL_MS, MEDIA_CLEANUP_INTERVAL_MS, PRESENCE_SWEEP_INTERVAL_MS } from "./config/constants.js";
+import { licenseExpirySweep } from "./jobs/license.expiry.js";
 import { presenceSweep } from "./jobs/presence.sweep.js";
 import { mediaCleanup } from "./jobs/media.cleanup.js";
 import { Worker } from "bullmq";
@@ -44,10 +45,12 @@ worker.on("completed", (job) => logger.debug({ job: job.name, id: job.id }, "job
 
 const sweep = setInterval(() => void presenceSweep().catch((err) => logger.error({ err }, "presence sweep failed")), PRESENCE_SWEEP_INTERVAL_MS);
 const cleanup = setInterval(() => void mediaCleanup().catch((err) => logger.error({ err }, "media cleanup failed")), MEDIA_CLEANUP_INTERVAL_MS);
+const expiry = setInterval(() => void licenseExpirySweep().catch((err) => logger.error({ err }, "licence expiry sweep failed")), EXPIRY_SWEEP_INTERVAL_MS);
 
 installProcessHandlers("Worker", async () => {
   clearInterval(sweep);
   clearInterval(cleanup);
+  clearInterval(expiry);
   await worker.close();
   await Promise.allSettled([disconnectDatabase(), closeRedis()]);
 });

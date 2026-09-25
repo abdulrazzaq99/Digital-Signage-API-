@@ -1,8 +1,12 @@
+import { standingSelect } from "../../core/auth/account.js";
 import { prisma } from "../../core/db/prisma.js";
 
+/** Users are loaded with their company's standing, which decides the read-only reason. */
+const withStanding = { company: { select: standingSelect } } as const;
+
 export const authRepository = {
-  findUserByEmail: (email: string) => prisma.user.findUnique({ where: { email: email.toLowerCase() } }),
-  findUserById: (id: string) => prisma.user.findUnique({ where: { id } }),
+  findUserByEmail: (email: string) => prisma.user.findUnique({ where: { email: email.toLowerCase() }, include: withStanding }),
+  findUserById: (id: string) => prisma.user.findUnique({ where: { id }, include: withStanding }),
   touchLogin: (id: string) => prisma.user.update({ where: { id }, data: { lastLoginAt: new Date() } }),
   updatePassword: (id: string, passwordHash: string) => prisma.user.update({ where: { id }, data: { passwordHash } }),
 
