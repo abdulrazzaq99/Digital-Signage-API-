@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { changeContent } from "../../core/assignments/content.js";
 import { publishAssignment } from "../../core/assignments/publish.js";
+import { canvasesShowing } from "../../core/assignments/refs.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
@@ -136,6 +137,8 @@ export const templatesService = {
     const i = await findInstance(companyId, id);
     const assigned = await prisma.screenAssignment.count({ where: { kind: "TEMPLATE_INSTANCE", refId: id } });
     if (assigned) throw new ConflictError(`Template output is live on ${assigned} screen${assigned > 1 ? "s" : ""}`, "TEMPLATE_INSTANCE_IN_USE");
+    const canvases = await canvasesShowing(companyId, "TEMPLATE_INSTANCE", id);
+    if (canvases.length) throw new ConflictError(`Template is shown by ${canvases.map((c) => `canvas "${c.name}"`).join(", ")}; remove it there first`, "IN_USE", { canvases });
     await prisma.templateInstance.delete({ where: { id } });
     await logActivity({ companyId, actor, action: "template_instance.deleted", resourceType: "template_instance", resourceId: id, summary: `"${i.name}" deleted` });
   },

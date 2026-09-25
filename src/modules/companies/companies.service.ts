@@ -1,6 +1,8 @@
 import type { AuthUser, TenantScope } from "../../core/auth/scope.js";
 import { logActivity } from "../../core/audit/activity.js";
-import { ForbiddenError, NotFoundError } from "../../core/errors/AppError.js";
+import { ConflictError, ForbiddenError, NotFoundError } from "../../core/errors/AppError.js";
+import { logger } from "../../core/middleware/logger.js";
+import { enqueue, JobNames } from "../../core/queue/queues.js";
 import { paginate, pageMeta, type PaginationQuery } from "../../core/http/pagination.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { companiesRepository as repo } from "./companies.repository.js";
@@ -62,8 +64,13 @@ export const companiesService = {
   async remove(actor: AuthUser, id: string) {
     const existing = await repo.findById(id);
     if (!existing) throw new NotFoundError("Company");
+    // Paired screens hold device credentials and licences; they must be unpaired first so nothing is
+    // left playing for a company that no longer exists.
     const counts = await repo.screenCounts(id);
+    if (counts.screens) throw new ConflictError(`"${existing.name}" still has ${counts.screens} paired screen${counts.screens > 1 ? "s" : ""}; unpair ${counts.screens > 1 ? "them" : "it"} first`, "COMPANY_HAS_SCREENS", { screens: counts.screens });
     await repo.delete(id);
-    await logActivity({ actor, action: "company.deleted", resourceType: "company", resourceId: id, summary: `"${existing.name}" deleted (${counts.screens} screens removed)` });
+    await logActivity({ actor, action: "company.deleted", resourceType: "company", resourceId: id, summary: `"${existing.name}" deleted` });
+    // The rows are gone; the worker removes its files. Best effort: a failure here only leaves storage behind.
+    await enqueue(JobNames.companyPurge, { companyId: id }).catch((err) => logger.error({ err, companyId: id }, "could not queue storage purge for deleted company"));
   },
 };

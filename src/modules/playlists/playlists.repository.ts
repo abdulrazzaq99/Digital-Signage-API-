@@ -33,6 +33,9 @@ export const playlistsRepository = {
     }
   },
   assetsInCompany: (companyId: string, ids: string[], tx?: Tx) => (tx ?? prisma).mediaAsset.findMany({ where: { companyId, id: { in: ids }, status: "READY" }, select: { id: true, type: true, pages: true, durationSec: true } }),
+  layoutsShowing: (companyId: string, playlistId: string) => prisma.layout.findMany({ where: { companyId, zones: { some: { playlistId } } }, select: { id: true, name: true } }),
+  /** Schedules still running or yet to start. */
+  upcomingSchedules: (playlistId: string, now = new Date()) => prisma.schedule.findMany({ where: { playlistId, OR: [{ endsAt: null }, { endsAt: { gt: now } }] }, select: { id: true, startsAt: true, endsAt: true }, orderBy: { startsAt: "asc" } }),
   assignedScreens: async (playlistIds: string[]) => {
     const rows = await prisma.screenAssignment.findMany({ where: { kind: "PLAYLIST", refId: { in: playlistIds } }, include: { screen: { select: { id: true, name: true } } } });
     const map = new Map<string, { id: string; name: string }[]>();

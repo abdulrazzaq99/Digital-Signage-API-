@@ -30,6 +30,11 @@ export async function assertImageKey(key: string, companyId: string | undefined,
   if (!found) throw new ValidationError("Choose a ready image from the media library", [{ path, message: "Choose a ready image from the media library" }], "MEDIA_KEY_INVALID");
 }
 
+/** Canvases of the company that show this playlist, layout or template instance. */
+export function canvasesShowing(companyId: string, kind: AssignmentKind, refId: string, db: Tx = prisma): Promise<{ id: string; name: string }[]> {
+  return db.canvasSet.findMany({ where: { companyId, contentKind: kind, contentRef: refId }, select: { id: true, name: true } });
+}
+
 /** Every ID in `groupIds` is a screen group of the company. */
 export async function assertGroupsInCompany(companyId: string, groupIds: string[], path: string, db: Tx = prisma): Promise<void> {
   const unique = [...new Set(groupIds)];

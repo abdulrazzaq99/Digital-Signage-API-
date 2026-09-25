@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { changeContent } from "../../core/assignments/content.js";
 import { publishAssignment } from "../../core/assignments/publish.js";
+import { canvasesShowing } from "../../core/assignments/refs.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
@@ -74,6 +75,8 @@ export const layoutsService = {
     const l = await findScoped(companyId, id);
     const assigned = await prisma.screenAssignment.count({ where: { kind: "LAYOUT", refId: id } });
     if (assigned) throw new ConflictError(`Layout is live on ${assigned} screen${assigned > 1 ? "s" : ""}`, "LAYOUT_IN_USE");
+    const canvases = await canvasesShowing(companyId, "LAYOUT", id);
+    if (canvases.length) throw new ConflictError(`Layout is shown by ${canvases.map((c) => `canvas "${c.name}"`).join(", ")}; remove it there first`, "IN_USE", { canvases });
     await prisma.layout.delete({ where: { id } });
     await logActivity({ companyId, actor, action: "layout.deleted", resourceType: "layout", resourceId: id, summary: `Layout "${l.name}" deleted` });
   },

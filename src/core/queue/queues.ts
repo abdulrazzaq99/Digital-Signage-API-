@@ -6,6 +6,7 @@ export const JobNames = {
   templateRender: "template.render",
   notificationSend: "notification.send",
   mailSend: "mail.send",
+  companyPurge: "company.purge",
   presenceSweep: "presence.sweep",
 } as const;
 

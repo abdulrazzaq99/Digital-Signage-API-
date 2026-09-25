@@ -14,6 +14,7 @@ import { mediaConvert } from "./jobs/media.convert.js";
 import { templateRender } from "./jobs/template.render.js";
 import { notificationSend } from "./jobs/notification.send.js";
 import { mailSend } from "./jobs/mail.send.js";
+import { companyPurge } from "./jobs/company.purge.js";
 import type { MailMessage } from "./core/mail/MailProvider.js";
 
 /** BullMQ worker bootstrap; job processors are registered as modules are built. */
@@ -31,6 +32,8 @@ const worker = new Worker(
         return notificationSend(job.data as { notificationId: string });
       case JobNames.mailSend:
         return mailSend(job.data as MailMessage);
+      case JobNames.companyPurge:
+        return companyPurge(job.data as { companyId: string });
       default:
         // Fail it (visible in the failed set) rather than completing a job nothing processed.
         throw new Error(`Unknown job: ${job.name}`);
