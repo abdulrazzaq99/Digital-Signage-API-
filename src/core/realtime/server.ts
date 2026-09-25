@@ -1,7 +1,9 @@
 import type { Server as HttpServer } from "node:http";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { Server, type Socket } from "socket.io";
+import { z } from "zod";
 import { env } from "../../config/env.js";
+import { playerService } from "../../modules/player/player.service.js";
 import { sha256, verifyAccess } from "../auth/tokens.js";
 import { prisma } from "../db/prisma.js";
 import { logger } from "../middleware/logger.js";
@@ -15,6 +17,45 @@ function tokenFrom(socket: Socket): string | undefined {
   const auth = socket.handshake.auth as { token?: string } | undefined;
   const header = socket.handshake.headers.authorization;
   return auth?.token ?? (header?.startsWith("Bearer ") ? header.slice(7) : undefined);
+}
+
+/** Player → server payloads. The same rules as POST /player/sync-ack, plus an upper bound on the version. */
+export const socketSyncAck = z.object({
+  version: z.number().int().min(0).max(2 ** 31),
+  status: z.enum(["downloaded", "activated", "failed"]).default("activated"),
+  error: z.string().max(500).optional(),
+});
+/** Presence pings carry nothing the server needs; anything but an object (or nothing) is malformed. */
+export const socketPresence = z.looseObject({}).nullish();
+
+type Ack = (response: unknown) => void;
+
+/**
+ * Wraps a socket event handler: validates the payload, never lets an error escape (an async throw in
+ * a listener would be an unhandled rejection), and reports problems to the sender as
+ * `socket.error` { event, code, message, issues? } plus the ack callback when one was given.
+ */
+function handle<T>(socket: Socket, event: string, schema: z.ZodType<T>, fn: (payload: T) => Promise<void>) {
+  socket.on(event, async (...args: unknown[]) => {
+    const ack = typeof args.at(-1) === "function" ? (args.pop() as Ack) : undefined;
+    const parsed = schema.safeParse(args[0]);
+    if (!parsed.success) {
+      const error = { event, code: "INVALID_PAYLOAD", message: "Invalid payload", issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })) };
+      logger.warn({ event, screenId: socket.data.screenId, userId: socket.data.userId, issues: error.issues }, "rejected socket payload");
+      socket.emit(Events.socketError, error);
+      ack?.({ ok: false, error });
+      return;
+    }
+    try {
+      await fn(parsed.data);
+      ack?.({ ok: true });
+    } catch (err) {
+      logger.error({ err, event, screenId: socket.data.screenId, userId: socket.data.userId }, "socket handler failed");
+      const error = { event, code: "INTERNAL_ERROR", message: "The event could not be processed" };
+      socket.emit(Events.socketError, error);
+      ack?.({ ok: false, error });
+    }
+  });
 }
 
 /** Boots Socket.IO with the /player and /app namespaces and a Redis adapter for multi-instance fan-out. */
@@ -36,28 +77,37 @@ export function initRealtime(server: HttpServer): Server {
       socket.data.companyId = screen.companyId;
       next();
     } catch (err) {
-      next(err as Error);
+      logger.error({ err }, "player socket authentication failed");
+      next(new Error("INTERNAL_ERROR"));
     }
   });
   player.on("connection", async (socket) => {
     const { screenId, companyId } = socket.data as { screenId: string; companyId: string };
-    await socket.join(screenRoom(screenId));
-    await markOnline(screenId, companyId);
-    socket.on(Events.presence, () => void markOnline(screenId, companyId));
-    socket.on(Events.syncAck, (payload: { version?: number }) => void handleSyncAck(screenId, companyId, payload));
+    handle(socket, Events.presence, socketPresence, () => markOnline(screenId, companyId));
+    // Same effect as POST /player/sync-ack, canvas readiness included.
+    handle(socket, Events.syncAck, socketSyncAck, (payload) => playerService.syncAck(screenId, companyId, payload));
     socket.on("disconnect", () => logger.debug({ screenId }, "player disconnected"));
+    try {
+      await socket.join(screenRoom(screenId));
+      await markOnline(screenId, companyId);
+    } catch (err) {
+      logger.error({ err, screenId }, "player connection setup failed");
+    }
   });
 
   // ---- /app: authenticated by user JWT, joins the company room ----
   const app = io.of("/app");
-  app.use((socket, next) => {
+  app.use(async (socket, next) => {
     try {
       const token = tokenFrom(socket);
       if (!token) return next(new Error("UNAUTHORIZED"));
       const claims = verifyAccess(token);
+      // A deactivated user's token may not have expired yet; the database decides.
+      const user = await prisma.user.findUnique({ where: { id: claims.sub }, select: { isActive: true, companyId: true, platformRole: true } });
+      if (!user || !user.isActive) return next(new Error("ACCOUNT_DISABLED"));
       socket.data.userId = claims.sub;
-      socket.data.companyId = claims.companyId;
-      socket.data.platform = claims.platformRole === "SUPER_ADMIN";
+      socket.data.companyId = user.companyId;
+      socket.data.platform = user.platformRole === "SUPER_ADMIN";
       next();
     } catch {
       next(new Error("UNAUTHORIZED"));
@@ -65,8 +115,12 @@ export function initRealtime(server: HttpServer): Server {
   });
   app.on("connection", async (socket) => {
     const { companyId, platform } = socket.data as { companyId: string | null; platform: boolean };
-    if (platform) await socket.join(platformRoom);
-    if (companyId) await socket.join(companyRoom(companyId));
+    try {
+      if (platform) await socket.join(platformRoom);
+      if (companyId) await socket.join(companyRoom(companyId));
+    } catch (err) {
+      logger.error({ err, userId: socket.data.userId }, "app connection setup failed");
+    }
   });
 
   logger.info("Realtime initialised (/player, /app)");
@@ -81,15 +135,6 @@ async function markOnline(screenId: string, companyId: string): Promise<void> {
   } else {
     await prisma.screen.update({ where: { id: screenId }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
   }
-}
-
-async function handleSyncAck(screenId: string, companyId: string, payload: { version?: number }): Promise<void> {
-  const version = Number(payload?.version ?? 0);
-  const screen = await prisma.screen.findUnique({ where: { id: screenId }, select: { manifestVersion: true } });
-  if (!screen) return;
-  const synced = version >= screen.manifestVersion;
-  await prisma.screen.update({ where: { id: screenId }, data: { ackVersion: version, syncState: synced ? "SYNCED" : "PENDING" } });
-  emitToCompany(companyId, Events.syncAck, { screenId, version, syncState: synced ? "SYNCED" : "PENDING" });
 }
 
 export function emitToScreen(screenId: string, event: EventName, payload: unknown): void {

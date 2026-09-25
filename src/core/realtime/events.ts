@@ -9,6 +9,8 @@ export const Events = {
   mediaReady: "media.ready",
   offerPublished: "offer.published",
   canvasActivate: "canvas.activate",
+  /** Server → sender: a socket event was malformed or failed. `{ event, code, message, issues? }`. */
+  socketError: "socket.error",
 } as const;
 
 export type EventName = (typeof Events)[keyof typeof Events];

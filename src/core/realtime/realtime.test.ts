@@ -62,6 +62,55 @@ describe("realtime", () => {
     player.close(); app.close();
   });
 
+  it("rejects malformed player payloads with socket.error and keeps the connection", async () => {
+    const { screen, credential } = await pairedScreen();
+    const player = ioClient(`${baseUrl}/player`, { auth: { token: credential }, transports: ["websocket"] });
+    await new Promise<void>((r) => player.on("connect", () => r()));
+    const errors: { event: string; code: string }[] = [];
+    player.on(Events.socketError, (e) => errors.push(e));
+
+    const bad = await player.emitWithAck(Events.syncAck, { version: 2 ** 31 + 1 });
+    expect(bad).toMatchObject({ ok: false, error: { code: "INVALID_PAYLOAD", event: Events.syncAck } });
+    player.emit(Events.syncAck, { version: -1 });
+    player.emit(Events.syncAck, "not an object");
+    player.emit(Events.presence, 42);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(errors.map((e) => e.code)).toEqual(["INVALID_PAYLOAD", "INVALID_PAYLOAD", "INVALID_PAYLOAD", "INVALID_PAYLOAD"]);
+    expect(player.connected).toBe(true);
+    expect((await prisma.screen.findUniqueOrThrow({ where: { id: screen.id } })).ackVersion).toBe(0);
+    expect(await player.emitWithAck(Events.presence, {})).toEqual({ ok: true });
+    player.close();
+  });
+
+  it("handles a socket sync ack like the HTTP one, including canvas readiness", async () => {
+    const { screen, credential } = await pairedScreen();
+    await prisma.screen.update({ where: { id: screen.id }, data: { manifestVersion: 3 } });
+    const other = await prisma.screen.create({ data: { companyId: (await prisma.screen.findUniqueOrThrow({ where: { id: screen.id } })).companyId, name: "Other" } });
+    const set = await prisma.canvasSet.create({ data: { companyId: other.companyId, name: "Wall", members: { create: [{ screenId: screen.id, position: 0 }, { screenId: other.id, position: 1 }] } } });
+    const player = ioClient(`${baseUrl}/player`, { auth: { token: credential }, transports: ["websocket"] });
+    await new Promise<void>((r) => player.on("connect", () => r()));
+
+    expect(await player.emitWithAck(Events.syncAck, { version: 3, status: "downloaded" })).toEqual({ ok: true });
+    let row = await prisma.screen.findUniqueOrThrow({ where: { id: screen.id } });
+    expect(row).toMatchObject({ syncState: "SYNCING", ackVersion: 0 });
+    expect((await prisma.canvasMember.findFirstOrThrow({ where: { setId: set.id, screenId: screen.id } })).ready).toBe(true);
+
+    await player.emitWithAck(Events.syncAck, { version: 3 });
+    row = await prisma.screen.findUniqueOrThrow({ where: { id: screen.id } });
+    expect(row).toMatchObject({ syncState: "SYNCED", ackVersion: 3 });
+    player.close();
+  });
+
+  it("refuses an /app socket for a deactivated user whose token has not expired", async () => {
+    const { ctx } = await pairedScreen();
+    await prisma.user.update({ where: { id: ctx.user.id }, data: { isActive: false } });
+    const err = await new Promise<string>((resolve) => {
+      const s = ioClient(`${baseUrl}/app`, { auth: { token: ctx.tokens.accessToken }, transports: ["websocket"], reconnection: false });
+      s.on("connect_error", (e) => { resolve(e.message); s.close(); });
+    });
+    expect(err).toBe("ACCOUNT_DISABLED");
+  });
+
   it("delivers offer.published exactly once to a Super Admin socket", async () => {
     const admin = await superAdminContext();
     const offer = await prisma.offer.create({ data: { title: "Bundle deal", category: "Hardware", summary: "Two screens for one", description: "Buy one get one free on displays", instructions: "Call us", contact: { name: "Sales" } } });
