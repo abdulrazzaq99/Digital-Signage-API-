@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../../core/db/prisma.js";
-import { customerContext } from "../../test/factories.js";
+import { customerContext, superAdminContext } from "../../test/factories.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
 
 beforeEach(resetDatabase);
@@ -131,8 +131,13 @@ describe("publish", () => {
     expect(f.body.error.code).toBe("SCREEN_NOT_FOUND");
     await prisma.license.update({ where: { companyId: ctx.company.id }, data: { state: "SUSPENDED" } });
     const s = await api().post(`/api/v1/playlists/${p.id}/publish`).set(ctx.auth).set("Idempotency-Key", "s").send({ screenIds: [screen.id] });
+    // The company is read-only now; even the Super Admin (never read-only) can't publish past the licence.
     expect(s.status).toBe(403);
-    expect(s.body.error.code).toBe("LICENSE_SUSPENDED");
+    expect(s.body.error.code).toBe("COMPANY_READ_ONLY");
+    const admin = await superAdminContext();
+    const byAdmin = await api().post(`/api/v1/playlists/${p.id}/publish`).set(admin.auth).set("X-Company-Id", ctx.company.id).set("Idempotency-Key", "s2").send({ screenIds: [screen.id] });
+    expect(byAdmin.status).toBe(403);
+    expect(byAdmin.body.error.code).toBe("LICENSE_SUSPENDED");
   });
 });
 

@@ -50,7 +50,13 @@ export const usersService = {
     if (!existing) throw new NotFoundError("User");
     const demotingOrDisablingAdmin = existing.companyRole === "ADMIN" && ((body.role && body.role !== "ADMIN") || body.isActive === false);
     if (demotingOrDisablingAdmin && (await repo.countAdmins(companyId)) <= 1) throw new ValidationError("A company must keep at least one active Admin", undefined, "LAST_ADMIN");
+    // Locking yourself out is never what an Admin meant; another Admin has to do it.
+    if (existing.id === actor.id && (body.isActive === false || (body.role !== undefined && body.role !== existing.companyRole))) {
+      throw new ConflictError("You cannot deactivate your own account or change your own role", "SELF_CHANGE");
+    }
     const user = await repo.update(id, { name: body.name, companyRole: body.role, title: body.title, phone: body.phone, isActive: body.isActive });
+    // Access tokens stop working at once (authenticate() checks isActive); sessions must not refresh either.
+    if (body.isActive === false && existing.isActive) await repo.revokeSessions(id);
     await logActivity({ companyId, actor, action: "user.updated", resourceType: "user", resourceId: id, summary: `${user.name} updated`, meta: { fields: Object.keys(body) } });
     return toUserDto(user);
   },

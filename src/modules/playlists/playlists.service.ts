@@ -1,11 +1,13 @@
 import type { z } from "zod";
 import { changeContent } from "../../core/assignments/content.js";
 import { emitAssignmentUpdated, publishAssignment } from "../../core/assignments/publish.js";
+import { canvasesShowing } from "../../core/assignments/refs.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, tenantWhere, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { withTransaction, type Tx } from "../../core/db/transaction.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
+import { assertNameFree, freeCopyName } from "../../core/validation/names.js";
 import { presignGet } from "../../core/storage/s3.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { playlistsRepository as repo, type PlaylistRow } from "./playlists.repository.js";
@@ -55,6 +57,7 @@ export const playlistsService = {
 
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createPlaylistBody>) {
     const companyId = requireCompanyId(scope);
+    await assertNameFree("playlist", body.name, { companyId });
     const p = await withTransaction(async (tx) => {
       const items = await assertAssets(companyId, body.items, tx);
       const created = await repo.create({ companyId, name: body.name }, tx);
@@ -68,6 +71,7 @@ export const playlistsService = {
   async update(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updatePlaylistBody>) {
     const existing = await repo.findScoped(scope.companyId, id);
     if (!existing) throw new NotFoundError("Playlist");
+    await assertNameFree("playlist", body.name, { companyId: existing.companyId, excludeId: id });
     const p = await changeContent(existing.companyId, { playlistIds: [id] }, async (tx) => {
       if (body.items) await repo.syncItems(id, await assertAssets(existing.companyId, body.items, tx), tx);
       await repo.update(id, { name: body.name }, tx);
@@ -82,7 +86,13 @@ export const playlistsService = {
     if (!existing) throw new NotFoundError("Playlist");
     const assigned = (await repo.assignedScreens([id])).get(id) ?? [];
     if (assigned.length) throw new ConflictError(`Playlist is assigned to ${assigned.length} screen${assigned.length > 1 ? "s" : ""}; publish other content first`, "PLAYLIST_IN_USE", { screens: assigned });
-    // Its schedules go with it and layout zones lose it, so those screens get a new manifest.
+    // A canvas or layout zone showing it would silently go blank on its screens.
+    const [canvases, layouts] = await Promise.all([canvasesShowing(existing.companyId, "PLAYLIST", id), repo.layoutsShowing(existing.companyId, id)]);
+    if (canvases.length || layouts.length) throw new ConflictError(`Playlist is shown by ${[...canvases.map((c) => `canvas "${c.name}"`), ...layouts.map((l) => `layout "${l.name}"`)].join(", ")}; remove it there first`, "IN_USE", { canvases, layouts });
+    // Deleting would silently cancel what is on the calendar; past schedules are history and go with it.
+    const upcoming = await repo.upcomingSchedules(id);
+    if (upcoming.length) throw new ConflictError(`Playlist has ${upcoming.length} current or upcoming schedule${upcoming.length > 1 ? "s" : ""}; delete ${upcoming.length > 1 ? "them" : "it"} first`, "PLAYLIST_SCHEDULED", { schedules: upcoming.map((s) => ({ id: s.id, startsAt: s.startsAt.toISOString(), endsAt: s.endsAt?.toISOString() ?? null })) });
+    // Its past schedules go with it, so screens still listing them get a new manifest.
     await changeContent(existing.companyId, { playlistIds: [id] }, (tx) => repo.delete(id, tx));
     await logActivity({ companyId: existing.companyId, actor, action: "playlist.deleted", resourceType: "playlist", resourceId: id, summary: `Playlist "${existing.name}" deleted` });
   },
@@ -91,7 +101,7 @@ export const playlistsService = {
     const existing = await repo.findScoped(scope.companyId, id);
     if (!existing) throw new NotFoundError("Playlist");
     const copy = await withTransaction(async (tx) => {
-      const created = await repo.create({ companyId: existing.companyId, name: `${existing.name} (copy)` }, tx);
+      const created = await repo.create({ companyId: existing.companyId, name: await freeCopyName("playlist", existing.name, { companyId: existing.companyId, db: tx }) }, tx);
       await repo.syncItems(created.id, existing.items.map((i) => ({ assetId: i.assetId, durationSec: i.durationSec, page: i.page })), tx);
       return repo.findScoped(existing.companyId, created.id, tx);
     });

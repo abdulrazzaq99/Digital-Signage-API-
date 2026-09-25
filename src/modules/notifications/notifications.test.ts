@@ -132,3 +132,21 @@ describe("notification input validation", () => {
     expect((await api().post("/api/v1/notifications").set(admin.auth).send({ ...base, audience: { kind: "companies", companyIds: ids } })).status).toBe(400);
   });
 });
+
+describe("subscriptions", () => {
+  it("never moves another user's subscription to the caller", async () => {
+    const ctx = await customerContext();
+    const other = await customerContext();
+    const mine = await api().post("/api/v1/notifications/subscriptions").set(ctx.auth).send({ externalId: "device-123", platform: "android" });
+    expect(mine.status).toBe(201);
+    const stolen = await api().post("/api/v1/notifications/subscriptions").set(other.auth).send({ externalId: "device-123" });
+    expect(stolen.status).toBe(409);
+    expect(stolen.body.error.code).toBe("SUBSCRIPTION_TAKEN");
+    expect((await prisma.pushSubscription.findUniqueOrThrow({ where: { externalId: "device-123" } })).userId).toBe(ctx.user.id);
+
+    // Re-registering your own is fine; once the owner unsubscribes, someone else may take it.
+    expect((await api().post("/api/v1/notifications/subscriptions").set(ctx.auth).send({ externalId: "device-123", platform: "ios" })).body.data.id).toBe(mine.body.data.id);
+    expect((await api().delete(`/api/v1/notifications/subscriptions/${mine.body.data.id}`).set(ctx.auth)).status).toBe(204);
+    expect((await api().post("/api/v1/notifications/subscriptions").set(other.auth).send({ externalId: "device-123" })).status).toBe(201);
+  });
+});

@@ -1,5 +1,6 @@
 import { prisma } from "../../core/db/prisma.js";
 import type { Tx } from "../../core/db/transaction.js";
+import { ValidationError } from "../../core/errors/AppError.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 
 export const playlistInclude = {
@@ -21,6 +22,9 @@ export const playlistsRepository = {
    */
   syncItems: async (playlistId: string, items: { id?: string; assetId: string; durationSec: number; page?: number | null }[], tx: Tx) => {
     const keep = items.map((i) => i.id).filter((id): id is string => !!id);
+    // Item IDs are only ever this playlist's own; never touch a row of another playlist (or tenant).
+    const own = keep.length ? await tx.playlistItem.count({ where: { playlistId, id: { in: keep } } }) : 0;
+    if (own !== new Set(keep).size) throw new ValidationError("One or more items do not belong to this playlist", undefined, "ITEM_NOT_FOUND");
     await tx.playlistItem.deleteMany({ where: { playlistId, ...(keep.length ? { id: { notIn: keep } } : {}) } });
     for (const id of keep) await tx.playlistItem.update({ where: { id }, data: { position: -1 - keep.indexOf(id) } });
     for (const [position, it] of items.entries()) {
@@ -29,6 +33,9 @@ export const playlistsRepository = {
     }
   },
   assetsInCompany: (companyId: string, ids: string[], tx?: Tx) => (tx ?? prisma).mediaAsset.findMany({ where: { companyId, id: { in: ids }, status: "READY" }, select: { id: true, type: true, pages: true, durationSec: true } }),
+  layoutsShowing: (companyId: string, playlistId: string) => prisma.layout.findMany({ where: { companyId, zones: { some: { playlistId } } }, select: { id: true, name: true } }),
+  /** Schedules still running or yet to start. */
+  upcomingSchedules: (playlistId: string, now = new Date()) => prisma.schedule.findMany({ where: { playlistId, OR: [{ endsAt: null }, { endsAt: { gt: now } }] }, select: { id: true, startsAt: true, endsAt: true }, orderBy: { startsAt: "asc" } }),
   assignedScreens: async (playlistIds: string[]) => {
     const rows = await prisma.screenAssignment.findMany({ where: { kind: "PLAYLIST", refId: { in: playlistIds } }, include: { screen: { select: { id: true, name: true } } } });
     const map = new Map<string, { id: string; name: string }[]>();

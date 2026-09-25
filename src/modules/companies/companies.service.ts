@@ -1,6 +1,10 @@
 import type { AuthUser, TenantScope } from "../../core/auth/scope.js";
 import { logActivity } from "../../core/audit/activity.js";
-import { ForbiddenError, NotFoundError } from "../../core/errors/AppError.js";
+import { withTransaction } from "../../core/db/transaction.js";
+import { assertNameFree } from "../../core/validation/names.js";
+import { ConflictError, ForbiddenError, NotFoundError } from "../../core/errors/AppError.js";
+import { logger } from "../../core/middleware/logger.js";
+import { enqueue, JobNames } from "../../core/queue/queues.js";
 import { paginate, pageMeta, type PaginationQuery } from "../../core/http/pagination.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { companiesRepository as repo } from "./companies.repository.js";
@@ -44,7 +48,8 @@ export const companiesService = {
 
   async create(actor: AuthUser, body: z.infer<typeof createCompanyBody>) {
     const { screenLimit, licenseState, ...rest } = body;
-    const c = await repo.create({ ...rest, code: await repo.nextCode(), license: { create: { screenLimit, state: licenseState } } });
+    await assertNameFree("company", rest.name);
+    const c = await withTransaction(async (tx) => repo.create({ ...rest, code: await repo.nextCode(tx), license: { create: { screenLimit, state: licenseState } } }, tx));
     await logActivity({ companyId: c.id, actor, action: "company.created", resourceType: "company", resourceId: c.id, summary: `"${c.name}" onboarded with ${screenLimit} screen licenses` });
     return toDto(c, { screens: 0, online: 0, offline: 0 });
   },
@@ -54,6 +59,7 @@ export const companiesService = {
     if (scope.kind === "company" && body.status !== undefined) throw new ForbiddenError("Only the Super Admin can change company status", "PLATFORM_ONLY");
     const existing = await repo.findById(id);
     if (!existing) throw new NotFoundError("Company");
+    await assertNameFree("company", body.name, { excludeId: id });
     const c = await repo.update(id, body);
     await logActivity({ companyId: id, actor, action: "company.updated", resourceType: "company", resourceId: id, summary: `${c.name} details updated`, meta: { fields: Object.keys(body) } });
     return toDto(c, await repo.screenCounts(id));
@@ -62,8 +68,13 @@ export const companiesService = {
   async remove(actor: AuthUser, id: string) {
     const existing = await repo.findById(id);
     if (!existing) throw new NotFoundError("Company");
+    // Paired screens hold device credentials and licences; they must be unpaired first so nothing is
+    // left playing for a company that no longer exists.
     const counts = await repo.screenCounts(id);
+    if (counts.screens) throw new ConflictError(`"${existing.name}" still has ${counts.screens} paired screen${counts.screens > 1 ? "s" : ""}; unpair ${counts.screens > 1 ? "them" : "it"} first`, "COMPANY_HAS_SCREENS", { screens: counts.screens });
     await repo.delete(id);
-    await logActivity({ actor, action: "company.deleted", resourceType: "company", resourceId: id, summary: `"${existing.name}" deleted (${counts.screens} screens removed)` });
+    await logActivity({ actor, action: "company.deleted", resourceType: "company", resourceId: id, summary: `"${existing.name}" deleted` });
+    // The rows are gone; the worker removes its files. Best effort: a failure here only leaves storage behind.
+    await enqueue(JobNames.companyPurge, { companyId: id }).catch((err) => logger.error({ err, companyId: id }, "could not queue storage purge for deleted company"));
   },
 };

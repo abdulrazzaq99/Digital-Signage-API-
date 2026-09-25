@@ -1,10 +1,12 @@
 import type { z } from "zod";
 import { OFFER_VIEW_WINDOW_MIN } from "../../config/constants.js";
+import { assertImageKey } from "../../core/assignments/refs.js";
 import { logActivity } from "../../core/audit/activity.js";
 import type { AuthUser, TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
-import { ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
+import { assertNameFree } from "../../core/validation/names.js";
 import { Events } from "../../core/realtime/events.js";
 import { getIo } from "../../core/realtime/server.js";
 import { presignGet } from "../../core/storage/s3.js";
@@ -55,6 +57,8 @@ export const offersService = {
 
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createOfferBody>) {
     requirePlatform(scope);
+    if (body.imageKey) await assertImageKey(body.imageKey, scope.companyId, "body.imageKey");
+    await assertNameFree("offer", body.title);
     const o = await prisma.offer.create({ data: { ...body, startsAt: body.startsAt ?? null, endsAt: body.endsAt ?? null } });
     await logActivity({ actor, action: "offer.created", resourceType: "offer", resourceId: o.id, summary: `Offer "${o.title}" created as draft` });
     return toDto(o, true);
@@ -68,15 +72,25 @@ export const offersService = {
     const startsAt = body.startsAt === undefined ? existing.startsAt : body.startsAt;
     const endsAt = body.endsAt === undefined ? existing.endsAt : body.endsAt;
     if (startsAt && endsAt && endsAt <= startsAt) throw new ValidationError("endsAt must be after startsAt", [{ path: body.endsAt === undefined ? "body.startsAt" : "body.endsAt", message: body.endsAt === undefined ? "Must be before the end" : "Must be after the start" }], "INVALID_WINDOW");
+    if (body.imageKey && body.imageKey !== existing.imageKey) await assertImageKey(body.imageKey, scope.companyId, "body.imageKey");
+    await assertNameFree("offer", body.title, { excludeId: id });
     const o = await prisma.offer.update({ where: { id }, data: body });
     await logActivity({ actor, action: "offer.updated", resourceType: "offer", resourceId: id, summary: `Offer "${o.title}" updated${existing.status === "PUBLISHED" ? " while live" : ""}` });
     return toDto(o, true);
   },
 
+  /**
+   * Publish: a draft, unpublished or expired offer goes live, unless its end date has passed.
+   * Unpublish: only a live offer can be taken down (to UNPUBLISHED). Anything else is 409
+   * INVALID_STATUS_TRANSITION, so a double click can't re-announce an offer.
+   */
   async setPublished(actor: AuthUser, scope: TenantScope, id: string, publish: boolean) {
     requirePlatform(scope);
     const existing = await prisma.offer.findUnique({ where: { id } });
     if (!existing) throw new NotFoundError("Offer");
+    if (publish && existing.status === "PUBLISHED") throw new ConflictError("This offer is already published", "INVALID_STATUS_TRANSITION", { from: existing.status, to: "PUBLISHED" });
+    if (!publish && existing.status !== "PUBLISHED") throw new ConflictError("Only a published offer can be unpublished", "INVALID_STATUS_TRANSITION", { from: existing.status, to: "UNPUBLISHED" });
+    if (publish && existing.endsAt && existing.endsAt <= new Date()) throw new ConflictError("This offer has ended; move its end date before publishing it", "OFFER_ENDED", [{ path: "body.endsAt", message: "The end date has passed" }]);
     const o = await prisma.offer.update({ where: { id }, data: publish ? { status: "PUBLISHED", publishedAt: existing.publishedAt ?? new Date() } : { status: "UNPUBLISHED" } });
     await logActivity({ actor, action: publish ? "offer.published" : "offer.unpublished", resourceType: "offer", resourceId: id, summary: `Offer "${o.title}" ${publish ? "published to the Marketplace" : "unpublished"}` });
     // Every `/app` socket (customers and the Super Admin) gets the event once.

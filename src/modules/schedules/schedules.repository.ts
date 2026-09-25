@@ -12,14 +12,18 @@ export const schedulesRepository = {
   update: (id: string, data: Prisma.ScheduleUncheckedUpdateInput, tx?: Tx) => (tx ?? prisma).schedule.update({ where: { id }, data, include: scheduleInclude }),
   delete: (id: string, tx?: Tx) => (tx ?? prisma).schedule.delete({ where: { id } }),
   /** Schedules on the same target whose window overlaps [startsAt, endsAt). Open-ended windows overlap everything after their start. */
-  overlapping: (companyId: string, targetKind: "SCREEN" | "GROUP", targetId: string, startsAt: Date, endsAt: Date | null, excludeId?: string) =>
-    prisma.schedule.findMany({
+  overlapping: (companyId: string, targetKind: "SCREEN" | "GROUP", targetId: string, startsAt: Date, endsAt: Date | null, excludeId?: string, tx?: Tx) =>
+    (tx ?? prisma).schedule.findMany({
       where: {
         companyId, targetKind, targetId, ...(excludeId ? { id: { not: excludeId } } : {}),
         AND: [{ OR: [{ endsAt: null }, { endsAt: { gt: startsAt } }] }, ...(endsAt ? [{ startsAt: { lt: endsAt } }] : [])],
       },
       include: scheduleInclude,
     }),
+  /** Serialises schedule writes per target until the transaction ends (an advisory lock, so heartbeats never wait on it). */
+  lockTarget: async (kind: "SCREEN" | "GROUP", id: string, tx: Tx) => {
+    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`schedule:${kind}:${id}`}))`;
+  },
   targetName: async (kind: "SCREEN" | "GROUP", id: string) => (kind === "SCREEN" ? (await prisma.screen.findUnique({ where: { id }, select: { name: true } }))?.name : (await prisma.screenGroup.findUnique({ where: { id }, select: { name: true } }))?.name) ?? "Unknown",
   targetExists: (companyId: string, kind: "SCREEN" | "GROUP", id: string) => (kind === "SCREEN" ? prisma.screen.count({ where: { id, companyId, pairingStatus: "PAIRED" } }) : prisma.screenGroup.count({ where: { id, companyId } })),
   activeFor: async (screenId: string, at: Date) => {

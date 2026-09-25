@@ -9,7 +9,15 @@ export const resetBody = z.object({ token: token(), password: password() }).open
 export const changePasswordBody = z.object({ currentPassword: passwordInput(), newPassword: password() }).openapi("ChangePasswordBody");
 
 export const userDto = z
-  .object({ id: z.string(), email: z.string(), name: z.string(), platformRole: z.string(), companyRole: z.string().nullable(), companyId: z.string().nullable(), title: z.string().nullable(), phone: z.string().nullable() })
+  .object({
+    id: z.string(), email: z.string(), name: z.string(), platformRole: z.string(), companyRole: z.string().nullable(), companyId: z.string().nullable(), title: z.string().nullable(), phone: z.string().nullable(),
+    /**
+     * Set when the user's company is read-only (COMPANY_SUSPENDED, COMPANY_INACTIVE, LICENSE_EXPIRED,
+     * LICENSE_SUSPENDED, LICENSE_DISABLED): they can read, but changes are refused with 403
+     * COMPANY_READ_ONLY. Always null for the Super Admin.
+     */
+    readOnlyReason: z.string().nullable(),
+  })
   .openapi("AuthUser");
 export const tokensDto = z.object({ accessToken: z.string(), refreshToken: z.string(), expiresIn: z.number(), user: userDto }).openapi("AuthTokens");
 

@@ -2,10 +2,12 @@ import type { z } from "zod";
 import { CANVAS_ACTIVATE_DELAY_MS } from "../../config/constants.js";
 import { changeContent } from "../../core/assignments/content.js";
 import { publishAssignment } from "../../core/assignments/publish.js";
+import { assertContentInCompany } from "../../core/assignments/refs.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
+import { assertNameFree } from "../../core/validation/names.js";
 import { Events } from "../../core/realtime/events.js";
 import { emitToCompany, emitToScreen } from "../../core/realtime/server.js";
 import { onlineSet } from "../../core/redis/presence.js";
@@ -53,6 +55,7 @@ export const canvasService = {
   },
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createCanvasBody>) {
     const companyId = requireCompanyId(scope);
+    await assertNameFree("canvas", body.name, { companyId });
     await validateMembers(companyId, body.screenIds);
     const c = await prisma.canvasSet.create({ data: { companyId, name: body.name, members: { create: body.screenIds.map((screenId, position) => ({ screenId, position })) } }, include });
     await logActivity({ companyId, actor, action: "canvas.created", resourceType: "canvas", resourceId: c.id, summary: `Canvas "${c.name}" created with ${body.screenIds.length} screens` });
@@ -61,7 +64,10 @@ export const canvasService = {
   async update(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updateCanvasBody>) {
     const companyId = requireCompanyId(scope);
     await findScoped(companyId, id);
+    await assertNameFree("canvas", body.name, { companyId, excludeId: id });
     if (body.screenIds) await validateMembers(companyId, body.screenIds, id);
+    // Content is referenced by ID only; it must be this company's (players load it by this ID).
+    if (body.content) await assertContentInCompany(companyId, body.content.kind, body.content.refId, "body.content.refId");
     const reconfigured = !!body.screenIds || body.content !== undefined;
     // Changing members or content returns the canvas to draft: it leaves the screens and must be
     // activated again. Either way the screens showing it get a new manifest version.

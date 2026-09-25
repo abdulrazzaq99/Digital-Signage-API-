@@ -257,3 +257,53 @@ describe("media input validation", () => {
     expect(fin.body.error.details).toEqual([{ path: "body.width", message: "Must be at most 16384" }]);
   });
 });
+
+describe("media integrity and usage", () => {
+  it("rejects a finalize whose stored size differs from the declared size, and drops the object", async () => {
+    const ctx = await customerContext();
+    const { asset } = await upload(ctx.auth, { sizeBytes: PNG.length + 5 });
+    const key = (await prisma.mediaAsset.findUniqueOrThrow({ where: { id: asset.id } })).storageKey;
+    const fin = await api().post(`/api/v1/media/${asset.id}/finalize`).set(ctx.auth).send({});
+    expect(fin.status).toBe(400);
+    expect(fin.body.error).toMatchObject({ code: "UPLOAD_SIZE_MISMATCH", details: { declared: PNG.length + 5, received: PNG.length } });
+    expect(await headObject(key)).toBeNull();
+    expect((await prisma.mediaAsset.findUniqueOrThrow({ where: { id: asset.id } })).status).toBe("UPLOADING");
+  });
+
+  it("refuses deleting media used by layouts, templates, campaigns or offers, listing every place", async () => {
+    const ctx = await customerContext();
+    const { asset } = await upload(ctx.auth);
+    await api().post(`/api/v1/media/${asset.id}/finalize`).set(ctx.auth).send({});
+    const m = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: asset.id } });
+
+    const preset = await prisma.layout.create({ data: { presetId: "p-full", name: "Full", isPreset: true, zones: { create: [{ index: 0, name: "Main", x: 0, y: 0, w: 1, h: 1 }] } } });
+    const layout = (await api().post("/api/v1/layouts").set(ctx.auth).send({ presetId: preset.presetId, name: "Lobby" })).body.data;
+    await api().put(`/api/v1/layouts/${layout.id}/zones/0`).set(ctx.auth).send({ bindingKind: "MEDIA", refId: asset.id });
+    const zoneOnly = await api().delete(`/api/v1/media/${asset.id}`).set(ctx.auth);
+    expect(zoneOnly.status).toBe(409);
+    expect(zoneOnly.body.error.details.usedIn).toEqual([{ kind: "LAYOUT", id: layout.id, name: "Lobby" }]);
+
+    const template = await prisma.template.create({ data: { name: "Promo", category: "Retail", fields: [{ key: "photo", label: "Photo", type: "image" }] } });
+    const instance = await prisma.templateInstance.create({ data: { companyId: ctx.company.id, templateId: template.id, name: "Spring promo", values: { photo: asset.id } } });
+    const offer = await prisma.offer.create({ data: { title: "Deal", category: "Hardware", summary: "A good deal", description: "A really good deal", instructions: "Call", contact: { name: "Sales" }, imageKey: m.storageKey } });
+    const campaign = await prisma.scratchCampaign.create({ data: { title: "Scratch", startsAt: new Date(), endsAt: new Date(Date.now() + 86_400_000), allocation: { loseWeight: 1, prizes: [] }, artworkKey: m.storageKey } });
+
+    const forced = await api().delete(`/api/v1/media/${asset.id}?force=true`).set(ctx.auth);
+    expect(forced.status).toBe(409);
+    expect(forced.body.error.code).toBe("MEDIA_IN_USE");
+    expect(forced.body.error.details.usedIn).toEqual(expect.arrayContaining([
+      { kind: "LAYOUT", id: layout.id, name: "Lobby" },
+      { kind: "TEMPLATE_INSTANCE", id: instance.id, name: "Spring promo" },
+      { kind: "OFFER", id: offer.id, name: "Deal" },
+      { kind: "CAMPAIGN", id: campaign.id, name: "Scratch" },
+    ]));
+    expect(await prisma.mediaAsset.count({ where: { id: asset.id } })).toBe(1);
+
+    // With only a layout zone left, force unbinds it.
+    await prisma.templateInstance.delete({ where: { id: instance.id } });
+    await prisma.offer.delete({ where: { id: offer.id } });
+    await prisma.scratchCampaign.delete({ where: { id: campaign.id } });
+    expect((await api().delete(`/api/v1/media/${asset.id}?force=true`).set(ctx.auth)).status).toBe(204);
+    expect(await prisma.layoutZone.findFirst({ where: { layoutId: layout.id } })).toMatchObject({ bindingKind: null, assetId: null });
+  });
+});

@@ -1,10 +1,12 @@
 import type { z } from "zod";
+import { assertImageKey } from "../../core/assignments/refs.js";
 import { logActivity } from "../../core/audit/activity.js";
 import type { AuthUser, TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
 import { withTransaction, type Tx } from "../../core/db/transaction.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
+import { assertNameFree } from "../../core/validation/names.js";
 import { presignGet } from "../../core/storage/s3.js";
 import type { Prisma, ScratchCampaign, ScratchPrize } from "../../generated/prisma/client.js";
 import type { addPrizeBody, createCampaignBody, listCampaignsQuery, listWinnersQuery, updateCampaignBody } from "./campaigns.schemas.js";
@@ -14,6 +16,16 @@ type CampaignRow = ScratchCampaign & { prizes: ScratchPrize[] };
 
 function requirePlatform(scope: TenantScope) {
   if (scope.kind !== "platform") throw new ForbiddenError("Only the Super Admin can manage campaigns", "PLATFORM_ONLY");
+}
+
+/** The `where` that matches campaigns whose effective status is `status`, so filtering happens before pagination. */
+function statusWhere(status: z.infer<typeof listCampaignsQuery>["status"], now: Date): Prisma.ScratchCampaignWhereInput {
+  if (!status) return {};
+  if (status === "DRAFT" || status === "INACTIVE") return { status };
+  const live = { status: { notIn: ["DRAFT", "INACTIVE"] as ("DRAFT" | "INACTIVE")[] } };
+  if (status === "SCHEDULED") return { ...live, startsAt: { gt: now } };
+  if (status === "ENDED") return { ...live, startsAt: { lte: now }, endsAt: { lt: now } };
+  return { ...live, startsAt: { lte: now }, endsAt: { gte: now } };
 }
 
 /** Effective status: DRAFT/INACTIVE stay as stored; ACTIVE resolves against the window. */
@@ -59,11 +71,10 @@ export const campaignsService = {
   async list(scope: TenantScope, q: z.infer<typeof listCampaignsQuery>) {
     const platform = scope.kind === "platform";
     const now = new Date();
-    const where: Prisma.ScratchCampaignWhereInput = platform ? { ...(q.search ? { title: { contains: q.search, mode: "insensitive" } } : {}) } : { status: "ACTIVE", startsAt: { lte: now }, endsAt: { gte: now } };
+    const where: Prisma.ScratchCampaignWhereInput = platform ? { ...statusWhere(q.status, now), ...(q.search ? { title: { contains: q.search, mode: "insensitive" } } : {}) } : { status: "ACTIVE", startsAt: { lte: now }, endsAt: { gte: now } };
     const { skip, take } = paginate(q);
     const [rows, total] = await Promise.all([prisma.scratchCampaign.findMany({ where, include, orderBy: { startsAt: "desc" }, skip, take }), prisma.scratchCampaign.count({ where })]);
-    const data = await Promise.all(rows.map((c) => toDto(c, platform)));
-    return { data: q.status && platform ? data.filter((d) => d.status === q.status) : data, meta: pageMeta(q, total) };
+    return { data: await Promise.all(rows.map((c) => toDto(c, platform))), meta: pageMeta(q, total) };
   },
 
   async get(scope: TenantScope, id: string) {
@@ -74,6 +85,8 @@ export const campaignsService = {
 
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createCampaignBody>) {
     requirePlatform(scope);
+    if (body.artworkKey) await assertImageKey(body.artworkKey, scope.companyId, "body.artworkKey");
+    await assertNameFree("campaign", body.title);
     const c = await withTransaction(async (tx) => {
       const created = await tx.scratchCampaign.create({ data: { title: body.title, description: body.description, status: body.activate ? "ACTIVE" : "DRAFT", startsAt: new Date(body.startsAt), endsAt: new Date(body.endsAt), maxAttempts: body.maxAttempts, requireOffersVisit: body.requireOffersVisit, artworkKey: body.artworkKey, allocation: { loseWeight: body.loseWeight, prizes: [] }, prizes: { create: body.prizes.map((p) => ({ name: p.name, value: p.value, quantity: p.quantity, remaining: p.quantity })) } }, include });
       const allocation: Allocation = { loseWeight: body.loseWeight, prizes: created.prizes.map((p, i) => ({ prizeId: p.id, weight: body.prizes[i]!.weight })) };
@@ -86,10 +99,18 @@ export const campaignsService = {
   async update(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updateCampaignBody>) {
     requirePlatform(scope);
     const existing = await findCampaign(id);
+    if (body.artworkKey && body.artworkKey !== existing.artworkKey) await assertImageKey(body.artworkKey, scope.companyId, "body.artworkKey");
+    await assertNameFree("campaign", body.title, { excludeId: id });
     const startsAt = body.startsAt ? new Date(body.startsAt) : existing.startsAt;
     const endsAt = body.endsAt ? new Date(body.endsAt) : existing.endsAt;
     if (endsAt <= startsAt) throw new ValidationError("endsAt must be after startsAt", undefined, "INVALID_WINDOW");
     const allocation = existing.allocation as unknown as Allocation;
+    assertRulesEditable(existing, {
+      startsAt: body.startsAt !== undefined && startsAt.getTime() !== existing.startsAt.getTime(),
+      endsAt: body.endsAt !== undefined && endsAt.getTime() !== existing.endsAt.getTime(),
+      maxAttempts: body.maxAttempts !== undefined && body.maxAttempts !== existing.maxAttempts,
+      loseWeight: body.loseWeight !== undefined && body.loseWeight !== allocation.loseWeight,
+    });
     const c = await prisma.scratchCampaign.update({ where: { id }, data: { title: body.title, description: body.description, startsAt, endsAt, maxAttempts: body.maxAttempts, requireOffersVisit: body.requireOffersVisit, artworkKey: body.artworkKey, ...(body.loseWeight !== undefined ? { allocation: { ...allocation, loseWeight: body.loseWeight } as unknown as Prisma.InputJsonValue } : {}) }, include });
     await logActivity({ actor, action: "campaign.updated", resourceType: "campaign", resourceId: id, summary: `Campaign "${c.title}" updated`, meta: { fields: Object.keys(body) } });
     return toDto(c, true);
@@ -107,6 +128,7 @@ export const campaignsService = {
   async addPrize(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof addPrizeBody>) {
     requirePlatform(scope);
     const existing = await findCampaign(id);
+    assertRulesEditable(existing, { prizes: true });
     const c = await withTransaction(async (tx) => {
       const prize = await tx.scratchPrize.create({ data: { campaignId: id, name: body.name, value: body.value, quantity: body.quantity, remaining: body.quantity } });
       const allocation = existing.allocation as unknown as Allocation;
@@ -122,6 +144,7 @@ export const campaignsService = {
     const prize = existing.prizes.find((p) => p.id === prizeId);
     if (!prize) throw new NotFoundError("Prize");
     if (prize.remaining !== prize.quantity) throw new ConflictError("Prizes that have already been awarded cannot be removed", "PRIZE_AWARDED");
+    assertRulesEditable(existing, { prizes: true });
     const allocation = existing.allocation as unknown as Allocation;
     const c = await withTransaction(async (tx) => {
       await tx.scratchPrize.delete({ where: { id: prizeId } });
@@ -204,6 +227,17 @@ export const campaignsService = {
     return toWinnerDto(updated);
   },
 };
+
+/**
+ * The draw rules (window, attempts, odds, prizes) are fixed while a campaign is active, so every
+ * participant plays by the same rules; deactivate it to change them. Title, description, artwork
+ * and the offers-visit rule stay editable.
+ */
+function assertRulesEditable(c: ScratchCampaign, changed: Record<string, boolean>): void {
+  if (c.status !== "ACTIVE") return;
+  const fields = Object.entries(changed).filter(([, v]) => v).map(([k]) => k);
+  if (fields.length) throw new ConflictError(`Deactivate the campaign before changing ${fields.join(", ")}`, "CAMPAIGN_ACTIVE", { fields });
+}
 
 async function eligibilityReason(c: CampaignRow, actor: AuthUser, attemptsUsed: number, tx: Tx | typeof prisma = prisma): Promise<string | null> {
   if (effectiveStatus(c) !== "ACTIVE") return "CAMPAIGN_INACTIVE";

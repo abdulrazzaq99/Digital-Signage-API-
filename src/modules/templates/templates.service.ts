@@ -1,11 +1,13 @@
 import type { z } from "zod";
 import { changeContent } from "../../core/assignments/content.js";
 import { publishAssignment } from "../../core/assignments/publish.js";
+import { canvasesShowing } from "../../core/assignments/refs.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { prisma } from "../../core/db/prisma.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { enqueue, JobNames } from "../../core/queue/queues.js";
+import { assertNameFree } from "../../core/validation/names.js";
 import { presignGet } from "../../core/storage/s3.js";
 import type { Template, TemplateInstance } from "../../generated/prisma/client.js";
 import { templateField, type TemplateField, type createInstanceBody, type createTemplateBody, type updateInstanceBody } from "./templates.schemas.js";
@@ -93,6 +95,7 @@ export const templatesService = {
     const issues = validateValues(fieldsOf(t), body.values);
     if (issues.length) throw new ValidationError("Template values are invalid", issues, "TEMPLATE_VALUES_INVALID");
     await assertImageValues(companyId, fieldsOf(t), body.values);
+    await assertNameFree("templateInstance", body.name, { companyId });
     const i = await prisma.templateInstance.create({ data: { companyId, templateId: t.id, name: body.name, values: body.values, renderPending: true }, include: { template: true } });
     await enqueue(JobNames.templateRender, { instanceId: i.id, companyId });
     await logActivity({ companyId, actor, action: "template_instance.created", resourceType: "template_instance", resourceId: i.id, summary: `"${i.name}" created from template ${t.name}` });
@@ -102,6 +105,7 @@ export const templatesService = {
   async updateInstance(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updateInstanceBody>) {
     const companyId = requireCompanyId(scope);
     const existing = await findInstance(companyId, id);
+    await assertNameFree("templateInstance", body.name, { companyId, excludeId: id });
     if (body.values) {
       const issues = validateValues(fieldsOf(existing.template), body.values);
       if (issues.length) throw new ValidationError("Template values are invalid", issues, "TEMPLATE_VALUES_INVALID");
@@ -136,6 +140,8 @@ export const templatesService = {
     const i = await findInstance(companyId, id);
     const assigned = await prisma.screenAssignment.count({ where: { kind: "TEMPLATE_INSTANCE", refId: id } });
     if (assigned) throw new ConflictError(`Template output is live on ${assigned} screen${assigned > 1 ? "s" : ""}`, "TEMPLATE_INSTANCE_IN_USE");
+    const canvases = await canvasesShowing(companyId, "TEMPLATE_INSTANCE", id);
+    if (canvases.length) throw new ConflictError(`Template is shown by ${canvases.map((c) => `canvas "${c.name}"`).join(", ")}; remove it there first`, "IN_USE", { canvases });
     await prisma.templateInstance.delete({ where: { id } });
     await logActivity({ companyId, actor, action: "template_instance.deleted", resourceType: "template_instance", resourceId: id, summary: `"${i.name}" deleted` });
   },
