@@ -10,7 +10,7 @@ import { paginate, pageMeta } from "../../core/http/pagination.js";
 import { enqueue, JobNames } from "../../core/queue/queues.js";
 import { deleteObject, headObject, presignGet, presignPut } from "../../core/storage/s3.js";
 import type { Prisma } from "../../generated/prisma/client.js";
-import { mediaRepository as repo, type MediaRow } from "./media.repository.js";
+import { mediaRepository as repo, type MediaRow, type MediaUsage } from "./media.repository.js";
 import type { finalizeBody, listMediaQuery, updateMediaBody, uploadUrlBody } from "./media.schemas.js";
 
 /**
@@ -31,6 +31,16 @@ export async function toMediaDto(m: MediaRow) {
 function dedupe<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   return items.filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true)));
+}
+
+const KIND_LABEL = { PLAYLIST: "playlist", LAYOUT: "layout", TEMPLATE_INSTANCE: "template", CAMPAIGN: "campaign", OFFER: "offer" } as const;
+
+/** "2 playlists and 1 layout" */
+function describe(places: MediaUsage[]): string {
+  const counts = new Map<keyof typeof KIND_LABEL, number>();
+  for (const p of places) counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1);
+  const parts = [...counts].map(([k, n]) => `${n} ${KIND_LABEL[k]}${n > 1 ? "s" : ""}`);
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : (parts[0] ?? "");
 }
 
 function sanitizeFileName(name: string): string {
@@ -89,6 +99,11 @@ export const mediaService = {
     if (!head) throw new ValidationError("Uploaded file was not found in storage; upload the file before finalizing", undefined, "UPLOAD_MISSING");
     if (head.size > MAX_UPLOAD_BYTES) throw new ValidationError("File exceeds the 500 MB limit", { size: head.size }, "FILE_TOO_LARGE");
     if (head.contentType && head.contentType !== m.mimeType) throw new ValidationError(`Uploaded content type ${head.contentType} does not match declared ${m.mimeType}`, undefined, "UNSUPPORTED_MEDIA_TYPE");
+    if (head.size !== Number(m.sizeBytes)) {
+      // A truncated or swapped file: drop it so a retry (with a re-issued URL) starts clean.
+      await deleteObject(m.storageKey);
+      throw new ValidationError(`Uploaded file is ${head.size} bytes but ${Number(m.sizeBytes)} bytes were declared; upload it again`, { declared: Number(m.sizeBytes), received: head.size }, "UPLOAD_SIZE_MISMATCH");
+    }
     const needsProcessing = m.type !== "IMAGE";
     const updated = await repo.update(id, { status: needsProcessing ? "PROCESSING" : "READY", sizeBytes: BigInt(head.size), checksum: body.checksum ?? head.etag ?? null, width: body.width, height: body.height, durationSec: body.durationSec, pages: body.pages, failureReason: null });
     await enqueue(JobNames.mediaConvert, { assetId: id, companyId: m.companyId });
@@ -119,19 +134,30 @@ export const mediaService = {
     return toMediaDto(updated);
   },
 
-  /** Deleting media that a playlist references requires `force`; forced deletes remove the items and log it. */
+  /**
+   * Media still in use can't be deleted (409 MEDIA_IN_USE, `details.usedIn` lists each place). With
+   * `force`, playlist items are removed and layout zones unbound, and it is logged. Template
+   * instances, campaign artwork and offer images always block: those need a replacement picked first.
+   */
   async remove(actor: AuthUser, scope: TenantScope, id: string, force: boolean) {
     const m = await repo.findScoped(scope.companyId, id);
     if (!m) throw new NotFoundError("Media");
-    const usedIn = dedupe(m.playlistItems.map((i) => i.playlist));
-    if (usedIn.length && !force) throw new ConflictError(`This file is used in ${usedIn.length} playlist${usedIn.length > 1 ? "s" : ""}`, "MEDIA_IN_USE", { usedIn });
+    const places = await repo.usage(m);
+    const usedIn = places.filter((p) => p.kind === "PLAYLIST");
+    const zones = places.filter((p) => p.kind === "LAYOUT");
+    const pinned = places.filter((p) => p.kind !== "PLAYLIST" && p.kind !== "LAYOUT");
+    if (pinned.length || (places.length && !force)) {
+      const message = pinned.length ? `This file is used in ${describe(pinned)}; choose another image there first` : `This file is used in ${describe(places)}`;
+      throw new ConflictError(message, "MEDIA_IN_USE", { usedIn: places });
+    }
     // Every generated file (thumbnail, PDF pages) goes with it, not just the thumbnail the DTO loads.
     const derived = await prisma.mediaDerivative.findMany({ where: { assetId: id }, select: { storageKey: true } });
     // Playlists and layout zones that showed it change, so their screens get a new manifest version.
     await changeContent(m.companyId, { assetIds: [id] }, async (tx) => {
       if (usedIn.length) await repo.removeFromPlaylists(id, tx);
+      if (zones.length) await tx.layoutZone.updateMany({ where: { assetId: id }, data: { bindingKind: null, assetId: null } });
       await repo.delete(id, tx);
-      await logActivity({ companyId: m.companyId, actor, action: "media.deleted", resourceType: "media", resourceId: id, summary: usedIn.length ? `${m.name} deleted and removed from ${usedIn.length} playlist(s)` : `${m.name} deleted`, meta: { usedIn } }, tx);
+      await logActivity({ companyId: m.companyId, actor, action: "media.deleted", resourceType: "media", resourceId: id, summary: places.length ? `${m.name} deleted and removed from ${describe(places)}` : `${m.name} deleted`, meta: { usedIn: places } }, tx);
     });
     await deleteObject(m.storageKey);
     await Promise.all(derived.map((d) => deleteObject(d.storageKey)));
