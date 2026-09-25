@@ -41,7 +41,8 @@ describe("offer status transitions", () => {
 });
 
 describe("campaign rules while active", () => {
-  const window = () => ({ startsAt: new Date(Date.now() - hour).toISOString(), endsAt: new Date(Date.now() + 24 * hour).toISOString() });
+  // New campaigns can't start in the past; "now" is within the API's clock-skew allowance.
+  const window = () => ({ startsAt: new Date().toISOString(), endsAt: new Date(Date.now() + 24 * hour).toISOString() });
 
   it("refuses changing the window, attempts, odds or prizes of an active campaign", async () => {
     const admin = await superAdminContext();

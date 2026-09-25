@@ -4,7 +4,7 @@ import { redis } from "../redis/client.js";
 import { sha256 } from "../auth/tokens.js";
 import { licenseExpirySweep } from "../../jobs/license.expiry.js";
 import { refreshGraceKey } from "../../modules/auth/auth.service.js";
-import { createUser, customerContext, login, superAdminContext } from "../../test/factories.js";
+import { createUser, customerContext, login, superAdminContext, MISSING_ID } from "../../test/factories.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
 
 beforeEach(resetDatabase);
@@ -28,7 +28,7 @@ describe("company read-only mode", () => {
     const me = await api().get("/api/v1/auth/me").set(auth);
     expect(me.body.data.readOnlyReason).toBe("COMPANY_SUSPENDED");
     expect((await api().get("/api/v1/playlists").set(auth)).status).toBe(200);
-    expect((await api().post("/api/v1/schedules/check-conflicts").set(auth).send({ playlistId: "x", targetKind: "SCREEN", targetId: screen.id, startsAt: new Date().toISOString() })).status).toBe(200);
+    expect((await api().post("/api/v1/schedules/check-conflicts").set(auth).send({ playlistId: MISSING_ID, targetKind: "SCREEN", targetId: screen.id, startsAt: new Date().toISOString() })).status).toBe(200);
 
     const create = await api().post("/api/v1/playlists").set(auth).send({ name: "New" });
     expect(create.status).toBe(403);

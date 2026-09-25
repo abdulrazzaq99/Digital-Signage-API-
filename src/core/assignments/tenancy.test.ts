@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../db/prisma.js";
-import { customerContext, superAdminContext } from "../../test/factories.js";
+import { customerContext, superAdminContext, MISSING_ID } from "../../test/factories.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
 
 beforeEach(resetDatabase);
@@ -27,7 +27,7 @@ describe("cross-tenant references", () => {
     const res = await api().patch(`/api/v1/canvas/${canvas.id}`).set(ctx.auth).send({ content: { kind: "PLAYLIST", refId: theirs.id } });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatchObject({ code: "CONTENT_NOT_FOUND", details: [{ path: "body.content.refId" }] });
-    const layout = await api().patch(`/api/v1/canvas/${canvas.id}`).set(ctx.auth).send({ content: { kind: "LAYOUT", refId: "nope" } });
+    const layout = await api().patch(`/api/v1/canvas/${canvas.id}`).set(ctx.auth).send({ content: { kind: "LAYOUT", refId: MISSING_ID } });
     expect(layout.body.error.code).toBe("CONTENT_NOT_FOUND");
     expect((await prisma.canvasSet.findUnique({ where: { id: canvas.id } }))?.contentRef).toBeNull();
   });
@@ -81,10 +81,10 @@ describe("cross-tenant references", () => {
   it("refuses notification audiences naming companies or users that don't exist", async () => {
     const admin = await superAdminContext();
     const ctx = await customerContext();
-    const res = await api().post("/api/v1/notifications").set(admin.auth).send({ title: "Hello", body: "Hello there", audience: { kind: "companies", companyIds: [ctx.company.id, "ghost"] } });
+    const res = await api().post("/api/v1/notifications").set(admin.auth).send({ title: "Hello", body: "Hello there", audience: { kind: "companies", companyIds: [ctx.company.id, MISSING_ID] } });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatchObject({ code: "AUDIENCE_NOT_FOUND", details: [{ path: "body.audience.companyIds.1" }] });
-    const users = await api().post("/api/v1/notifications").set(admin.auth).send({ title: "Hello", body: "Hello there", audience: { kind: "users", userIds: ["ghost"] } });
+    const users = await api().post("/api/v1/notifications").set(admin.auth).send({ title: "Hello", body: "Hello there", audience: { kind: "users", userIds: [MISSING_ID] } });
     expect(users.body.error.code).toBe("AUDIENCE_NOT_FOUND");
     expect(await prisma.notification.count()).toBe(0);
   });

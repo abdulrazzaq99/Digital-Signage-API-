@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../db/prisma.js";
-import { customerContext, superAdminContext } from "../../test/factories.js";
+import { customerContext, superAdminContext, MISSING_ID, OTHER_MISSING_ID } from "../../test/factories.js";
 import { api, closeAll, resetDatabase } from "../../test/helpers.js";
 
 beforeEach(resetDatabase);
@@ -46,7 +46,7 @@ describe("unique names", () => {
     expect((await api().post("/api/v1/template-instances").set(ctx.auth).send({ templateId: template.id, name: "spring", values: { headline: "Hi" } })).body.error.code).toBe("DUPLICATE");
 
     await prisma.canvasSet.create({ data: { companyId: ctx.company.id, name: "Wall" } });
-    expect((await api().post("/api/v1/canvas").set(ctx.auth).send({ name: "wall", screenIds: ["a", "b"] })).body.error.code).toBe("DUPLICATE");
+    expect((await api().post("/api/v1/canvas").set(ctx.auth).send({ name: "wall", screenIds: [MISSING_ID, OTHER_MISSING_ID] })).body.error.code).toBe("DUPLICATE");
   });
 
   it("refuses duplicate company names, campaign titles and offer titles, and allocates distinct company codes under concurrency", async () => {

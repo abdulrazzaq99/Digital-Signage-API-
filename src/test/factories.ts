@@ -55,3 +55,7 @@ export async function superAdminContext() {
   const tokens = await login(user.email, user.password);
   return { user, tokens, auth: { Authorization: `Bearer ${tokens.accessToken}` } };
 }
+
+/** Well-formed ids that match no row: they pass request validation, so tests reach the business rule. */
+export const MISSING_ID = "cmissing0000000000000000a";
+export const OTHER_MISSING_ID = "cmissing0000000000000000b";
