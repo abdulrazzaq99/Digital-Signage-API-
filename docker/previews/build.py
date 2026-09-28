@@ -1,0 +1,182 @@
+"""Generates /1–/4 colour previews of the Overview dashboard. One layout, four palettes."""
+import pathlib, sys
+
+OUT = pathlib.Path(sys.argv[1])
+OUT.mkdir(parents=True, exist_ok=True)
+
+PALETTES = [
+    dict(n=1, name="Aubergine", note="Deep plum: premium and calm, clearly apart from every status colour.",
+         primary="#5B2A86", hover="#4A2170", tint="#F1EAF7", tint_ink="#5B2A86", accent="#5B2A86",
+         ink="#1C1B22", muted="#6B6775", bg="#F7F6F9", border="#E6E3EB", nav_active="solid"),
+    dict(n=2, name="Pine", note="Nordic forest green: natural and Scandinavian.",
+         primary="#1D5B4F", hover="#164A40", tint="#E4F0EC", tint_ink="#1D5B4F", accent="#1D5B4F",
+         ink="#16201D", muted="#5F6B67", bg="#F5F7F6", border="#E1E7E4", nav_active="solid"),
+    dict(n=3, name="Graphite & Lingon", note="Almost monochrome graphite with one lingonberry accent.",
+         primary="#23262B", hover="#3A3F46", tint="#FBEAF0", tint_ink="#B4235A", accent="#B4235A",
+         ink="#1C1B22", muted="#6B6775", bg="#F6F6F7", border="#E4E4E7", nav_active="marker"),
+    dict(n=4, name="Espresso", note="Coffee brown: warm and grounded, made for cafés and shops.",
+         primary="#4B3426", hover="#3B281D", tint="#F1E9E2", tint_ink="#4B3426", accent="#4B3426",
+         ink="#211B17", muted="#6E645C", bg="#F7F5F2", border="#E8E2DB", nav_active="solid"),
+]
+
+I = {  # lucide icon paths (24x24, stroke)
+    "grid": '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+    "building": '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>',
+    "file": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><circle cx="10" cy="14" r="2"/><path d="m11.5 15.5 3 3"/>',
+    "monitor": '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/>',
+    "monitor-off": '<path d="M17 17H4a2 2 0 0 1-2-2V5c0-1.5 1-2 1-2"/><path d="M22 15V5a2 2 0 0 0-2-2H9"/><path d="M8 21h8M12 17v4M2 2l20 20"/>',
+    "image": '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+    "list": '<path d="M12 12H3M16 6H3M12 18H3M16 12l5 3-5 3v-6Z"/>',
+    "layout": '<rect width="18" height="7" x="3" y="3" rx="1"/><rect width="9" height="7" x="3" y="14" rx="1"/><rect width="5" height="7" x="16" y="14" rx="1"/>',
+    "tag": '<path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4Z"/><circle cx="7.5" cy="7.5" r=".5"/>',
+    "ticket": '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 17v2M13 11v2"/>',
+    "bell": '<path d="M10.3 21a1.9 1.9 0 0 0 3.4 0M3.3 15.3A1 1 0 0 0 4 17h16a1 1 0 0 0 .7-1.7C19.4 14 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.4 6-2.7 7.3"/>',
+    "activity": '<path d="M22 12h-2.5a2 2 0 0 0-1.9 1.5l-2.4 8.4a.3.3 0 0 1-.5 0L9.2 2.1a.3.3 0 0 0-.5 0l-2.3 8.4A2 2 0 0 1 4.5 12H2"/>',
+    "settings": '<path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/>',
+    "wifi": '<path d="M12 20h.01M2 8.8a15 15 0 0 1 20 0M5 12.9a10 10 0 0 1 14 0M8.5 16.4a5 5 0 0 1 7 0"/>',
+    "upload": '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+    "plus": '<path d="M5 12h14M12 5v14"/>',
+    "search": '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    "menu": '<path d="M4 12h16M4 6h16M4 18h16"/>',
+    "chev": '<path d="m6 9 6 6 6-6"/>',
+    "chev-r": '<path d="m9 18 6-6-6-6"/>',
+    "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+    "refresh": '<path d="M3 12a9 9 0 0 1 9-9 9.8 9.8 0 0 1 6.7 2.7L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.8 9.8 0 0 1-6.7-2.7L3 16"/><path d="M8 16H3v5"/>',
+}
+
+def icon(name, cls="i"):
+    return f'<svg class="{cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{I[name]}</svg>'
+
+NAV = [("grid", "Overview", True), ("building", "Companies", False), ("file", "Licenses", False), ("monitor", "Screens", False),
+       ("image", "Media", False), ("list", "Playlists", False), ("layout", "Layouts / Templates", False), ("tag", "Offers / Marketplace", False),
+       ("ticket", "Scratch & Win", False), ("bell", "Notifications", False), ("activity", "Activity", False), ("settings", "Settings", False)]
+
+COMPANIES = [("Café Linnea", 6, 8), ("Rönninge Livs", 4, 4), ("Tvätthem Östermalm", 2, 3), ("Addify Vending", 0, 2)]
+ACTIVITY = [("refresh", "Playlist “Morning menu” published to 6 screens", "Café Linnea · 12 min ago", "ok"),
+            ("monitor", "Screen “Counter left” went offline", "Addify Vending · 38 min ago", "off"),
+            ("building", "“Rönninge Livs” onboarded with 5 screen licences", "Platform · 2 hours ago", "ok"),
+            ("upload", "12 images uploaded to the media library", "Tvätthem Östermalm · Yesterday", "ok")]
+
+CSS = """
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.i{width:16px;height:16px;flex:none}
+.shell{display:flex;min-height:100vh}
+aside{width:232px;flex:none;background:#fff;border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;padding:18px 20px;border-bottom:1px solid var(--border)}
+.logo{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center}
+.brand b{font-size:15px;letter-spacing:-.01em}
+nav{padding:12px 10px;flex:1;overflow:auto}
+nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;margin:2px 0;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:500;position:relative}
+nav a:hover{background:var(--hoverbg);color:var(--ink)}
+nav a.on.solid{background:var(--primary);color:#fff}
+nav a.on.marker{background:var(--tint);color:var(--ink)}
+nav a.on.marker::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+nav a.on.marker .i{color:var(--accent)}
+.me{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--border)}
+.av{width:36px;height:36px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600}
+.me small{display:block;color:var(--accent);font-size:11px}
+.me .i{margin-left:auto;color:var(--muted)}
+main{flex:1;min-width:0}
+header{height:64px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 20px;position:sticky;top:0;z-index:2}
+.iconbtn{width:36px;height:36px;border:1px solid var(--border);border-radius:9px;display:grid;place-items:center;color:var(--muted);background:#fff}
+header h1{font-size:15px;margin:0}header p{margin:0;font-size:12px;color:var(--muted)}
+.search{margin-left:auto;display:flex;align-items:center;gap:8px;height:36px;width:260px;border:1px solid var(--border);border-radius:9px;padding:0 12px;color:var(--muted);font-size:13px;background:var(--bg)}
+.wrap{padding:24px;display:grid;gap:20px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.card{background:#fff;border:1px solid var(--border);border-radius:14px}
+.stat{padding:18px 20px}
+.chip{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;margin-bottom:14px;background:var(--tint);color:var(--tint-ink)}
+.chip.green{background:var(--online-bg);color:var(--online)}.chip.red{background:var(--offline-bg);color:var(--offline)}
+.stat .v{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.stat .l{margin-top:8px;font-weight:600}.stat .s{color:var(--muted);font-size:12px}
+.row{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);gap:20px}
+.ch{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 20px;border-bottom:1px solid var(--border)}
+.ch h2{margin:0;font-size:15px}.ch p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.live{font-size:12px;color:var(--online);display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+.co{padding:14px 20px;display:grid;gap:14px}
+.co .top{display:flex;justify-content:space-between;font-weight:600}.co .top span{color:var(--muted);font-weight:500;font-size:12px}
+.bar{height:8px;border-radius:99px;background:var(--offline-bg);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--online);border-radius:99px}
+.qa{padding:14px;display:grid;gap:10px}
+.qa a{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--border);border-radius:11px;color:inherit;text-decoration:none}
+.qa a:hover{border-color:var(--primary)}
+.qa .chip{margin:0}
+.qa b{display:block;font-size:14px}.qa small{color:var(--muted)}
+.btn{display:flex;justify-content:center;align-items:center;gap:8px;height:40px;border-radius:10px;background:var(--primary);color:#fff;font-weight:600;border:0;font:inherit;cursor:pointer}
+.btn:hover{background:var(--hover)}
+.ph{padding:14px;display:grid;gap:10px}
+.st{display:flex;align-items:center;gap:8px;padding:11px 14px;border-radius:10px;font-size:13px}
+.st b{margin-left:auto;font-size:16px;color:var(--ink)}
+.st.on{background:var(--online-bg);color:var(--online)}.st.warn{background:var(--warn-bg);color:var(--warn)}.st.off{background:var(--offline-bg);color:var(--offline)}
+.st span{color:var(--muted)}
+.act a{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border);color:inherit;text-decoration:none}
+.act .chip{margin:0;background:var(--bg);color:var(--muted)}
+.act b{display:block;font-weight:600}.act small{color:var(--muted)}
+.act .dot{margin-left:auto;color:var(--online)}.act .dot.off{color:var(--offline)}
+.more{display:flex;align-items:center;gap:4px;padding:14px 20px;color:var(--primary-text);font-weight:600;text-decoration:none}
+.seg{display:flex;border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px}.seg span{padding:5px 12px;border-radius:6px;font-size:13px;color:var(--muted)}.seg span.on{background:var(--tint);color:var(--tint-ink);font-weight:600}
+.switch{position:fixed;right:16px;bottom:16px;z-index:5;background:#fff;border:1px solid var(--border);border-radius:14px;padding:10px 12px;box-shadow:0 8px 24px rgba(20,16,30,.12);display:flex;gap:10px;align-items:center;max-width:calc(100vw - 32px)}
+.switch .nm{font-weight:700}.switch .nt{font-size:12px;color:var(--muted);max-width:230px}
+.switch nav{display:flex;gap:6px;padding:0}
+.switch nav a{margin:0;padding:0;width:34px;height:34px;display:grid;place-items:center;border-radius:9px;border:2px solid transparent;font-weight:700;color:#fff}
+.switch nav a.cur{border-color:var(--ink)}
+.sw{display:flex;gap:4px;margin-top:6px}.sw i{width:18px;height:18px;border-radius:5px;border:1px solid rgba(0,0,0,.08)}
+@media (max-width:1100px){.row{grid-template-columns:1fr 1fr}.row .wide{grid-column:1/-1}}
+@media (max-width:760px){aside{display:none}.stats{grid-template-columns:1fr 1fr;gap:10px}.row{grid-template-columns:1fr}.search{display:none}.wrap{padding:14px}.stat{padding:14px}.stat .v{font-size:22px}.switch{left:12px;right:12px;bottom:12px;flex-wrap:wrap}.switch .nt{display:none}header p{display:none}}
+"""
+
+def page(p):
+    other_links = "".join(
+        f'<a href="/{q["n"]}" class="{"cur" if q["n"] == p["n"] else ""}" style="background:{q["primary"] if q["n"] != 3 else q["accent"]}" title="{q["name"]}">{q["n"]}</a>'
+        for q in PALETTES)
+    swatches = "".join(f'<i style="background:{c}" title="{c}"></i>' for c in [p["primary"], p["accent"], p["tint"], p["ink"], p["bg"]] if True)
+    nav = "".join(f'<a href="#" class="{"on " + p["nav_active"] if on else ""}">{icon(ic)}{label}</a>' for ic, label, on in NAV)
+    companies = "".join(
+        f'<div><div class="top">{n}<span>{on} of {tot} online</span></div><div class="bar"><i style="width:{0 if tot == 0 else round(on / tot * 100)}%"></i></div></div>'
+        for n, on, tot in COMPANIES)
+    acts = "".join(
+        f'<a href="#"><span class="chip">{icon(ic)}</span><span><b>{t}</b><small>{m}</small></span><span class="dot {"off" if s == "off" else ""}"></span></a>'
+        for ic, t, m, s in ACTIVITY)
+    primary_text = p["primary"] if p["n"] != 3 else p["accent"]
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Option {p['n']} · {p['name']}: Digital Signage colours</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>:root{{--primary:{p['primary']};--hover:{p['hover']};--tint:{p['tint']};--tint-ink:{p['tint_ink']};--accent:{p['accent']};--primary-text:{primary_text};
+--ink:{p['ink']};--muted:{p['muted']};--bg:{p['bg']};--border:{p['border']};--hoverbg:{p['bg']};
+--online:#15803D;--online-bg:#EAF6EE;--warn:#A16207;--warn-bg:#FBF3E2;--offline:#B91C1C;--offline-bg:#FCECEC}}{CSS}</style></head>
+<body><div class="shell">
+<aside><div class="brand"><span class="logo">{icon('grid')}</span><b>DSP Admin</b></div><nav>{nav}</nav>
+<div class="me"><span class="av">AA</span><span><b>AddifyTv Admin</b><small>Super Admin</small></span>{icon('logout')}</div></aside>
+<main><header><span class="iconbtn">{icon('menu')}</span><div><h1>Overview</h1><p>Monitor your platform and manage connected screens.</p></div><span class="search">{icon('search')} Search platform…</span></header>
+<div class="wrap">
+<section class="stats">
+<div class="card stat"><span class="chip">{icon('monitor')}</span><div class="v">15</div><div class="l">Total screens</div><div class="s">Across all companies</div></div>
+<div class="card stat"><span class="chip green">{icon('wifi')}</span><div class="v">12</div><div class="l">Screens online</div><div class="s">80% available</div></div>
+<div class="card stat"><span class="chip red">{icon('monitor-off')}</span><div class="v">3</div><div class="l">Screens offline</div><div class="s">No recent heartbeat</div></div>
+<div class="card stat"><span class="chip">{icon('building')}</span><div class="v">4</div><div class="l">Companies</div><div class="s">4 active licences</div></div>
+</section>
+<section class="row">
+<div class="card wide"><div class="ch"><div><h2>Screen health</h2><p>Screens online per company</p></div><span class="live"><span class="dot"></span>Live</span></div><div class="co">{companies}</div></div>
+<div class="card"><div class="ch"><div><h2>Quick actions</h2></div></div><div class="qa">
+<a href="#"><span class="chip">{icon('building')}</span><span><b>Add company</b><small>Onboard a new customer</small></span></a>
+<a href="#"><span class="chip">{icon('monitor')}</span><span><b>Pair a screen</b><small>Connect a signage player</small></span></a>
+<a href="#"><span class="chip">{icon('upload')}</span><span><b>Upload media</b><small>Images, videos and PDFs</small></span></a>
+<button class="btn">{icon('plus')}Send notification</button></div></div>
+<div class="card"><div class="ch"><div><h2>Platform health</h2><p>15 screens in total</p></div><span class="live"><span class="dot"></span>Live</span></div><div class="ph">
+<div class="st on"><span class="dot" style="color:var(--online)"></span>Online <span>· Playing</span><b>12</b></div>
+<div class="st warn"><span class="dot" style="color:var(--warn)"></span>Error <span>· Player reported a fault</span><b>0</b></div>
+<div class="st off"><span class="dot" style="color:var(--offline)"></span>Offline <span>· No heartbeat</span><b>3</b></div></div></div>
+</section>
+<section class="card act"><div class="ch"><div><h2>Recent activity</h2><p>What changed across all companies</p></div><div class="seg"><span class="on">All</span><span>Alerts</span></div></div>{acts}
+<a class="more" href="#">View full activity log {icon('chev-r')}</a></section>
+</div></main></div>
+<div class="switch" role="navigation" aria-label="Colour options"><div><div class="nm">Option {p['n']}: {p['name']}</div><div class="nt">{p['note']}</div><div class="sw">{swatches}</div></div><nav>{other_links}</nav></div>
+</body></html>
+"""
+
+for p in PALETTES:
+    (OUT / f"{p['n']}.html").write_text(page(p), encoding="utf-8")
+print("wrote", [f"{p['n']}.html" for p in PALETTES])

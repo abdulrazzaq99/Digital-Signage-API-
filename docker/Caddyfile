@@ -14,5 +14,14 @@
 	@other not host {$WEB_HOST}
 	redir @other https://{$WEB_HOST}{uri} permanent
 	encode gzip
-	reverse_proxy web:3000
+	# Colour-scheme previews for the client (static pages in docker/previews): /1 to /4.
+	@preview path /1 /2 /3 /4
+	handle @preview {
+		root * /srv/previews
+		rewrite * {path}.html
+		file_server
+	}
+	handle {
+		reverse_proxy web:3000
+	}
 }
