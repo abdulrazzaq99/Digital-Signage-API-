@@ -1,4 +1,4 @@
-"""Generates /1–/4 colour previews of the Overview dashboard. One layout, four palettes."""
+"""Generates /1–/5 colour previews of the Overview dashboard. One layout, five palettes."""
 import pathlib, sys
 
 OUT = pathlib.Path(sys.argv[1])
@@ -17,6 +17,9 @@ PALETTES = [
     dict(n=4, name="Espresso", note="Coffee brown: warm and grounded, made for cafés and shops.",
          primary="#4B3426", hover="#3B281D", tint="#F1E9E2", tint_ink="#4B3426", accent="#4B3426",
          ink="#211B17", muted="#6E645C", bg="#F7F5F2", border="#E8E2DB", nav_active="solid"),
+    dict(n=5, name="Orange", note="Burnt orange: energetic and eye-catching, like signage itself.",
+         primary="#C2410C", hover="#9A3412", tint="#FFEDE3", tint_ink="#C2410C", accent="#C2410C",
+         ink="#1F1A17", muted="#6B6560", bg="#F8F6F4", border="#EAE4DF", nav_active="solid"),
 ]
 
 I = {  # lucide icon paths (24x24, stroke)
