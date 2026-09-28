@@ -101,6 +101,8 @@ services:
     environment:
       API_HOST: ${API_HOST}
       WEB_HOST: ${WEB_HOST}
+      API_SITES: ${API_SITES:-${API_HOST}}
+      WEB_SITES: ${WEB_SITES:-${WEB_HOST}}
     ports: ["80:80", "443:443"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

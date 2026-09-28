@@ -1,11 +1,18 @@
-# Terminates HTTPS (Let's Encrypt, automatic) and proxies REST and Socket.IO to the API.
-{$API_HOST} {
+# Terminates HTTPS (Let's Encrypt, automatic) and proxies to the API and the web dashboards.
+# API_SITES / WEB_SITES are comma-separated host lists; they default to API_HOST / WEB_HOST.
+
+# API (REST and Socket.IO). Every listed host is served, so screens and apps set up with an older
+# address keep working after a domain change.
+{$API_SITES} {
 	encode gzip
 	reverse_proxy api:4000
 }
 
-# Web dashboards (Next.js).
-{$WEB_HOST} {
+# Web dashboards (Next.js). WEB_HOST is the canonical address: any other listed host (www, an old
+# address) redirects there, so users, cookies and CORS all see one origin.
+{$WEB_SITES} {
+	@other not host {$WEB_HOST}
+	redir @other https://{$WEB_HOST}{uri} permanent
 	encode gzip
 	reverse_proxy web:3000
 }
