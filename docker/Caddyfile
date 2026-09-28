@@ -14,8 +14,8 @@
 	@other not host {$WEB_HOST}
 	redir @other https://{$WEB_HOST}{uri} permanent
 	encode gzip
-	# Colour-scheme previews for the client (static pages in docker/previews): /1 to /5.
-	@preview path /1 /2 /3 /4 /5
+	# Colour-scheme previews for the client (static pages in docker/previews): /1 to /6.
+	@preview path /1 /2 /3 /4 /5 /6
 	handle @preview {
 		root * /srv/previews
 		rewrite * {path}.html

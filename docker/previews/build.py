@@ -1,13 +1,14 @@
-"""Generates /1–/5 colour previews of the Overview dashboard. One layout, five palettes."""
+"""Generates /1–/6 colour previews of the Overview dashboard. One layout, six palettes."""
 import pathlib, sys
 
 OUT = pathlib.Path(sys.argv[1])
 OUT.mkdir(parents=True, exist_ok=True)
 
 PALETTES = [
-    dict(n=1, name="Aubergine", note="Deep plum: premium and calm, clearly apart from every status colour.",
-         primary="#5B2A86", hover="#4A2170", tint="#F1EAF7", tint_ink="#5B2A86", accent="#5B2A86",
-         ink="#1C1B22", muted="#6B6775", bg="#F7F6F9", border="#E6E3EB", nav_active="solid"),
+    dict(n=1, name="Navy & Orange", note="Deep navy for structure, burnt orange only for actions: the two colours working together.",
+         primary="#C2410C", hover="#9A3412", tint="#E8EEF8", tint_ink="#1D3B6E", accent="#F97316", link="#1D3B6E",
+         ink="#14203A", muted="#5B6475", bg="#F5F7FA", border="#E2E7EF", nav_active="solid",
+         side_bg="#13213C", side_ink="#FFFFFF", side_muted="#A9B4C8", side_border="#22345A", side_hover="#1C2E52", side_accent="#F97316", avatar="#F97316"),
     dict(n=2, name="Pine", note="Nordic forest green: natural and Scandinavian.",
          primary="#1D5B4F", hover="#164A40", tint="#E4F0EC", tint_ink="#1D5B4F", accent="#1D5B4F",
          ink="#16201D", muted="#5F6B67", bg="#F5F7F6", border="#E1E7E4", nav_active="solid"),
@@ -20,6 +21,9 @@ PALETTES = [
     dict(n=5, name="Orange", note="Burnt orange: energetic and eye-catching, like signage itself.",
          primary="#C2410C", hover="#9A3412", tint="#FFEDE3", tint_ink="#C2410C", accent="#C2410C",
          ink="#1F1A17", muted="#6B6560", bg="#F8F6F4", border="#EAE4DF", nav_active="solid"),
+    dict(n=6, name="Aubergine", note="Deep plum: premium and calm, clearly apart from every status colour.",
+         primary="#5B2A86", hover="#4A2170", tint="#F1EAF7", tint_ink="#5B2A86", accent="#5B2A86",
+         ink="#1C1B22", muted="#6B6775", bg="#F7F6F9", border="#E6E3EB", nav_active="solid"),
 ]
 
 I = {  # lucide icon paths (24x24, stroke)
@@ -65,21 +69,21 @@ CSS = """
 body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
 .i{width:16px;height:16px;flex:none}
 .shell{display:flex;min-height:100vh}
-aside{width:232px;flex:none;background:#fff;border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
-.brand{display:flex;align-items:center;gap:10px;padding:18px 20px;border-bottom:1px solid var(--border)}
+aside{width:232px;flex:none;background:var(--side-bg);border-right:1px solid var(--side-border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;padding:18px 20px;border-bottom:1px solid var(--side-border)}
 .logo{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center}
-.brand b{font-size:15px;letter-spacing:-.01em}
+.brand b{font-size:15px;letter-spacing:-.01em;color:var(--side-ink)}
 nav{padding:12px 10px;flex:1;overflow:auto}
-nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;margin:2px 0;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:500;position:relative}
-nav a:hover{background:var(--hoverbg);color:var(--ink)}
+nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;margin:2px 0;border-radius:8px;color:var(--side-muted);text-decoration:none;font-weight:500;position:relative}
+nav a:hover{background:var(--side-hover);color:var(--side-ink)}
 nav a.on.solid{background:var(--primary);color:#fff}
 nav a.on.marker{background:var(--tint);color:var(--ink)}
 nav a.on.marker::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
 nav a.on.marker .i{color:var(--accent)}
-.me{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--border)}
-.av{width:36px;height:36px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600}
-.me small{display:block;color:var(--accent);font-size:11px}
-.me .i{margin-left:auto;color:var(--muted)}
+.me{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--side-border);color:var(--side-ink)}
+.av{width:36px;height:36px;border-radius:50%;background:var(--avatar);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600}
+.me small{display:block;color:var(--side-accent);font-size:11px}
+.me .i{margin-left:auto;color:var(--side-muted)}
 main{flex:1;min-width:0}
 header{height:64px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 20px;position:sticky;top:0;z-index:2}
 .iconbtn{width:36px;height:36px;border:1px solid var(--border);border-radius:9px;display:grid;place-items:center;color:var(--muted);background:#fff}
@@ -131,9 +135,9 @@ header h1{font-size:15px;margin:0}header p{margin:0;font-size:12px;color:var(--m
 
 def page(p):
     other_links = "".join(
-        f'<a href="/{q["n"]}" class="{"cur" if q["n"] == p["n"] else ""}" style="background:{q["primary"] if q["n"] != 3 else q["accent"]}" title="{q["name"]}">{q["n"]}</a>'
+        f'<a href="/{q["n"]}" class="{"cur" if q["n"] == p["n"] else ""}" style="background:{q.get("side_bg") or (q["primary"] if q["n"] != 3 else q["accent"])}" title="{q["name"]}">{q["n"]}</a>'
         for q in PALETTES)
-    swatches = "".join(f'<i style="background:{c}" title="{c}"></i>' for c in [p["primary"], p["accent"], p["tint"], p["ink"], p["bg"]] if True)
+    swatches = "".join(f'<i style="background:{c}" title="{c}"></i>' for c in ([p["side_bg"], p["primary"], p["accent"], p["tint"], p["bg"]] if "side_bg" in p else [p["primary"], p["accent"], p["tint"], p["ink"], p["bg"]]))
     nav = "".join(f'<a href="#" class="{"on " + p["nav_active"] if on else ""}">{icon(ic)}{label}</a>' for ic, label, on in NAV)
     companies = "".join(
         f'<div><div class="top">{n}<span>{on} of {tot} online</span></div><div class="bar"><i style="width:{0 if tot == 0 else round(on / tot * 100)}%"></i></div></div>'
@@ -141,7 +145,9 @@ def page(p):
     acts = "".join(
         f'<a href="#"><span class="chip">{icon(ic)}</span><span><b>{t}</b><small>{m}</small></span><span class="dot {"off" if s == "off" else ""}"></span></a>'
         for ic, t, m, s in ACTIVITY)
-    primary_text = p["primary"] if p["n"] != 3 else p["accent"]
+    primary_text = p.get("link") or (p["primary"] if p["n"] != 3 else p["accent"])
+    side = dict(side_bg="#FFFFFF", side_ink=p["ink"], side_muted=p["muted"], side_border=p["border"], side_hover=p["bg"], side_accent=p["accent"], avatar=p["ink"])
+    side.update({k: p[k] for k in side if k in p})
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Option {p['n']} · {p['name']}: Digital Signage colours</title>
@@ -149,6 +155,7 @@ def page(p):
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>:root{{--primary:{p['primary']};--hover:{p['hover']};--tint:{p['tint']};--tint-ink:{p['tint_ink']};--accent:{p['accent']};--primary-text:{primary_text};
 --ink:{p['ink']};--muted:{p['muted']};--bg:{p['bg']};--border:{p['border']};--hoverbg:{p['bg']};
+--side-bg:{side['side_bg']};--side-ink:{side['side_ink']};--side-muted:{side['side_muted']};--side-border:{side['side_border']};--side-hover:{side['side_hover']};--side-accent:{side['side_accent']};--avatar:{side['avatar']};
 --online:#15803D;--online-bg:#EAF6EE;--warn:#A16207;--warn-bg:#FBF3E2;--offline:#B91C1C;--offline-bg:#FCECEC}}{CSS}</style></head>
 <body><div class="shell">
 <aside><div class="brand"><span class="logo">{icon('grid')}</span><b>DSP Admin</b></div><nav>{nav}</nav>

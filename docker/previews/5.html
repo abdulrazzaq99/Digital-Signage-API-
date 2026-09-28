@@ -5,26 +5,27 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>:root{--primary:#C2410C;--hover:#9A3412;--tint:#FFEDE3;--tint-ink:#C2410C;--accent:#C2410C;--primary-text:#C2410C;
 --ink:#1F1A17;--muted:#6B6560;--bg:#F8F6F4;--border:#EAE4DF;--hoverbg:#F8F6F4;
+--side-bg:#FFFFFF;--side-ink:#1F1A17;--side-muted:#6B6560;--side-border:#EAE4DF;--side-hover:#F8F6F4;--side-accent:#C2410C;--avatar:#1F1A17;
 --online:#15803D;--online-bg:#EAF6EE;--warn:#A16207;--warn-bg:#FBF3E2;--offline:#B91C1C;--offline-bg:#FCECEC}
 *{box-sizing:border-box}html,body{margin:0}
 body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
 .i{width:16px;height:16px;flex:none}
 .shell{display:flex;min-height:100vh}
-aside{width:232px;flex:none;background:#fff;border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
-.brand{display:flex;align-items:center;gap:10px;padding:18px 20px;border-bottom:1px solid var(--border)}
+aside{width:232px;flex:none;background:var(--side-bg);border-right:1px solid var(--side-border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;padding:18px 20px;border-bottom:1px solid var(--side-border)}
 .logo{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center}
-.brand b{font-size:15px;letter-spacing:-.01em}
+.brand b{font-size:15px;letter-spacing:-.01em;color:var(--side-ink)}
 nav{padding:12px 10px;flex:1;overflow:auto}
-nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;margin:2px 0;border-radius:8px;color:var(--muted);text-decoration:none;font-weight:500;position:relative}
-nav a:hover{background:var(--hoverbg);color:var(--ink)}
+nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;margin:2px 0;border-radius:8px;color:var(--side-muted);text-decoration:none;font-weight:500;position:relative}
+nav a:hover{background:var(--side-hover);color:var(--side-ink)}
 nav a.on.solid{background:var(--primary);color:#fff}
 nav a.on.marker{background:var(--tint);color:var(--ink)}
 nav a.on.marker::before{content:"";position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
 nav a.on.marker .i{color:var(--accent)}
-.me{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--border)}
-.av{width:36px;height:36px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600}
-.me small{display:block;color:var(--accent);font-size:11px}
-.me .i{margin-left:auto;color:var(--muted)}
+.me{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--side-border);color:var(--side-ink)}
+.av{width:36px;height:36px;border-radius:50%;background:var(--avatar);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600}
+.me small{display:block;color:var(--side-accent);font-size:11px}
+.me .i{margin-left:auto;color:var(--side-muted)}
 main{flex:1;min-width:0}
 header{height:64px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 20px;position:sticky;top:0;z-index:2}
 .iconbtn{width:36px;height:36px;border:1px solid var(--border);border-radius:9px;display:grid;place-items:center;color:var(--muted);background:#fff}
@@ -99,5 +100,5 @@ header h1{font-size:15px;margin:0}header p{margin:0;font-size:12px;color:var(--m
 <section class="card act"><div class="ch"><div><h2>Recent activity</h2><p>What changed across all companies</p></div><div class="seg"><span class="on">All</span><span>Alerts</span></div></div><a href="#"><span class="chip"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.8 9.8 0 0 1 6.7 2.7L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.8 9.8 0 0 1-6.7-2.7L3 16"/><path d="M8 16H3v5"/></svg></span><span><b>Playlist “Morning menu” published to 6 screens</b><small>Café Linnea · 12 min ago</small></span><span class="dot "></span></a><a href="#"><span class="chip"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span><b>Screen “Counter left” went offline</b><small>Addify Vending · 38 min ago</small></span><span class="dot off"></span></a><a href="#"><span class="chip"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/></svg></span><span><b>“Rönninge Livs” onboarded with 5 screen licences</b><small>Platform · 2 hours ago</small></span><span class="dot "></span></a><a href="#"><span class="chip"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></span><span><b>12 images uploaded to the media library</b><small>Tvätthem Östermalm · Yesterday</small></span><span class="dot "></span></a>
 <a class="more" href="#">View full activity log <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></a></section>
 </div></main></div>
-<div class="switch" role="navigation" aria-label="Colour options"><div><div class="nm">Option 5: Orange</div><div class="nt">Burnt orange: energetic and eye-catching, like signage itself.</div><div class="sw"><i style="background:#C2410C" title="#C2410C"></i><i style="background:#C2410C" title="#C2410C"></i><i style="background:#FFEDE3" title="#FFEDE3"></i><i style="background:#1F1A17" title="#1F1A17"></i><i style="background:#F8F6F4" title="#F8F6F4"></i></div></div><nav><a href="/1" class="" style="background:#5B2A86" title="Aubergine">1</a><a href="/2" class="" style="background:#1D5B4F" title="Pine">2</a><a href="/3" class="" style="background:#B4235A" title="Graphite & Lingon">3</a><a href="/4" class="" style="background:#4B3426" title="Espresso">4</a><a href="/5" class="cur" style="background:#C2410C" title="Orange">5</a></nav></div>
+<div class="switch" role="navigation" aria-label="Colour options"><div><div class="nm">Option 5: Orange</div><div class="nt">Burnt orange: energetic and eye-catching, like signage itself.</div><div class="sw"><i style="background:#C2410C" title="#C2410C"></i><i style="background:#C2410C" title="#C2410C"></i><i style="background:#FFEDE3" title="#FFEDE3"></i><i style="background:#1F1A17" title="#1F1A17"></i><i style="background:#F8F6F4" title="#F8F6F4"></i></div></div><nav><a href="/1" class="" style="background:#13213C" title="Navy & Orange">1</a><a href="/2" class="" style="background:#1D5B4F" title="Pine">2</a><a href="/3" class="" style="background:#B4235A" title="Graphite & Lingon">3</a><a href="/4" class="" style="background:#4B3426" title="Espresso">4</a><a href="/5" class="cur" style="background:#C2410C" title="Orange">5</a><a href="/6" class="" style="background:#5B2A86" title="Aubergine">6</a></nav></div>
 </body></html>
