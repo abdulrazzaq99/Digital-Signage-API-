@@ -22,6 +22,7 @@ x-api-env: &api-env
   ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-}
   ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY:-}
   SMTP_URL: ${SMTP_URL:-}
+  SES_REGION: ${SES_REGION:-}
   MAIL_FROM: ${MAIL_FROM:-Digital Signage <no-reply@localhost>}
   APP_PUBLIC_URL: ${APP_PUBLIC_URL}
 
