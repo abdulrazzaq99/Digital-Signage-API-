@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Customer portal test cases: AddifyTv Digital Signage</title>
+<style>
+  :root { --navy:#13213c; --navy2:#1d3b6e; --tint:#e8eef8; --orange:#c2410c; --ink:#14203a; --muted:#5b6475; --bg:#f5f7fa; --line:#e2e7ef; --ok:#15803d; --okbg:#eaf6ee; --bad:#b91c1c; --badbg:#fcecec; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); }
+  a { color:var(--navy2); }
+  header { background:var(--navy); color:#fff; padding:28px 20px; }
+  header .in, main { max-width:980px; margin:0 auto; }
+  header h1 { margin:0 0 6px; font-size:24px; }
+  header p { margin:0; color:#a9b4c8; max-width:70ch; }
+  main { padding:20px 16px 80px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:16px 0; }
+  h2 { font-size:18px; margin:34px 0 4px; }
+  h2 small { font-weight:400; color:var(--muted); font-size:13px; }
+  .lead { color:var(--muted); margin:0 0 8px; max-width:75ch; }
+  h3 { font-size:15px; margin:0 0 8px; }
+  ol, ul { margin:6px 0; padding-left:22px; }
+  li { margin:3px 0; }
+  code, pre { font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  pre { background:var(--navy); color:#e8eef8; padding:12px 14px; border-radius:8px; overflow-x:auto; white-space:pre-wrap; word-break:break-all; margin:8px 0; }
+  code { background:var(--tint); padding:1px 5px; border-radius:4px; }
+  pre code { background:none; padding:0; }
+  .bar { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid var(--line); padding:10px 16px; }
+  .bar .in { max-width:980px; margin:0 auto; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .meter { flex:1 1 220px; height:10px; background:var(--line); border-radius:99px; overflow:hidden; display:flex; }
+  .meter i { display:block; height:100%; }
+  .meter .p { background:var(--ok); } .meter .f { background:var(--bad); }
+  .count { font-size:13px; color:var(--muted); white-space:nowrap; }
+  button { font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--ink); padding:6px 12px; }
+  button:hover { border-color:#c9d1dd; }
+  button[aria-pressed="true"] { background:var(--tint); border-color:var(--navy2); color:var(--navy2); font-weight:600; }
+  .tc { border-top:1px solid var(--line); padding:14px 0; display:grid; grid-template-columns:1fr 190px; gap:16px; }
+  .tc:first-of-type { border-top:0; }
+  .tc h4 { margin:0 0 2px; font-size:15px; }
+  .id { color:var(--muted); font-weight:500; margin-right:6px; }
+  .meta { font-size:12.5px; color:var(--muted); margin:2px 0 6px; }
+  .need { display:inline-block; font-size:12px; background:#fbf3e2; color:#854d0e; border-radius:5px; padding:1px 7px; margin-right:6px; }
+  .exp { background:var(--okbg); border-radius:8px; padding:8px 12px; margin-top:8px; }
+  .exp b { color:var(--ok); }
+  .res { display:flex; flex-direction:column; gap:6px; }
+  .res .btns { display:flex; gap:6px; }
+  .res button { flex:1; }
+  .res button.pass[aria-pressed="true"] { background:var(--okbg); border-color:var(--ok); color:var(--ok); }
+  .res button.fail[aria-pressed="true"] { background:var(--badbg); border-color:var(--bad); color:var(--bad); }
+  textarea { width:100%; min-height:54px; font:inherit; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:6px 8px; resize:vertical; }
+  .tc.is-pass { background:linear-gradient(#fff,#fff); }
+  .hidden { display:none; }
+  .who { font-size:12px; color:var(--muted); min-height:16px; }
+  #gate form { display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
+  #gate label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); flex:1 1 200px; }
+  #gate input { font:inherit; font-size:16px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; color:var(--ink); }
+  #gate button, .primary { background:var(--orange); color:#fff; border-color:var(--orange); font-weight:600; padding:9px 16px; }
+  #gatemsg { color:var(--bad); font-size:13px; margin:8px 0 0; min-height:18px; }
+  #sync { font-size:12.5px; color:var(--muted); }
+  #sync.bad { color:var(--bad); font-weight:600; }
+  body.locked #cases, body.locked .bar { display:none; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  td, th { text-align:left; padding:6px 8px; border-top:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:13px; border-top:0; }
+  @media (max-width:720px) { .tc { grid-template-columns:1fr; } }
+  @media print { .bar, .res textarea:placeholder-shown { display:none; } body { background:#fff; } .card { border:0; padding:0; } pre { color:#000; background:#f2f2f2; } }
+</style>
+</head>
+<body>
+<header><div class="in">
+  <h1>Customer portal test cases</h1>
+  <p>AddifyTv Digital Signage, company (customer) side, at <b>https://addifytv.nu/portal</b>. Each test says where to go, what to do, and what you should see. Mark it Pass or Fail. Results are saved on the server, so everyone with the access code sees the same results.</p>
+</div></header>
+
+<div class="bar"><div class="in">
+  <div class="meter" aria-hidden="true"><i class="p" id="mp"></i><i class="f" id="mf"></i></div>
+  <span class="count" id="count"></span>
+  <button data-filter="all" aria-pressed="true">All</button>
+  <button data-filter="todo" aria-pressed="false">Not tested</button>
+  <button data-filter="fail" aria-pressed="false">Failed</button>
+  <button id="copy">Copy failed list</button>
+  <span id="sync"></span>
+  <button id="signout">Change tester</button>
+</div></div>
+
+<main>
+  <section class="card" id="gate">
+    <h3>Start testing</h3>
+    <p class="lead">Enter your name and the access code you were given. Your Pass/Fail marks and notes are saved for the whole team as you go.</p>
+    <form id="gateform">
+      <label>Your name<input id="who" autocomplete="name" maxlength="60" required></label>
+      <label>Access code<input id="code" type="password" autocomplete="off" maxlength="80" required></label>
+      <button type="submit">Start</button>
+    </form>
+    <p id="gatemsg" role="alert"></p>
+  </section>
+
+  <section class="card">
+    <h3>Before you start</h3>
+    <table>
+      <tr><th style="width:190px">You need</th><th>Details</th></tr>
+      <tr><td>A company admin login</td><td>The user you added to the company "Test" (role Admin). Sign in at <a href="https://addifytv.nu/login" target="_blank" rel="noopener">https://addifytv.nu/login</a>.</td></tr>
+      <tr><td>The Super Admin login</td><td><code>admin@addifytv.com</code>. Only for tests marked <span class="need">Needs Super Admin</span>. Use a second browser or a private window so both can stay signed in.</td></tr>
+      <tr><td>Test files</td><td>One JPG, one PNG, one short MP4 video, one PDF with 2 or more pages, and one file that is not allowed (for example a <code>.txt</code> or <code>.zip</code>).</td></tr>
+      <tr><td>A screen</td><td>A real Android player, or the "pretend player" commands below (tests marked <span class="need">Needs a player</span>).</td></tr>
+      <tr><td>A second email inbox</td><td>To receive an invitation and a password-reset email.</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <h3>Pretend player (if you have no real screen)</h3>
+    <p class="lead">Paste these in Terminal on a Mac. They do what the Android player does. Replace the words in CAPITALS with the values you get back.</p>
+    <b>1. Get a pairing code</b> (valid for 5 minutes)
+    <pre><code>curl -s -X POST https://api.addifytv.nu/api/v1/player/pairing-sessions -H 'content-type: application/json' -d '{"deviceId":"test-device-001","model":"Test player","playerVersion":"1.0.0"}'</code></pre>
+    It prints a <code>sessionId</code> and a 6-character <code>code</code>. Use the code in test C1. For a second screen, change <code>test-device-001</code> to <code>test-device-002</code>.
+    <br><br><b>2. After pairing in the portal, collect the screen's key</b>
+    <pre><code>curl -s https://api.addifytv.nu/api/v1/player/pairing-sessions/SESSION_ID</code></pre>
+    It prints a <code>credential</code>. Keep it; it is shown only once.
+    <br><br><b>3. Tell the portal the screen is on</b> (repeat every minute to stay Online)
+    <pre><code>curl -s -X POST https://api.addifytv.nu/api/v1/player/heartbeat -H 'authorization: Bearer CREDENTIAL' -H 'content-type: application/json' -d '{"state":"PLAYING","resolution":"1920x1080","playerVersion":"1.0.0"}'</code></pre>
+    <b>4. See what the screen was told to play</b>
+    <pre><code>curl -s https://api.addifytv.nu/api/v1/player/manifest -H 'authorization: Bearer CREDENTIAL'</code></pre>
+    <b>5. Confirm the screen received it</b> (use the <code>version</code> number from step 4)
+    <pre><code>curl -s -X POST https://api.addifytv.nu/api/v1/player/sync-ack -H 'authorization: Bearer CREDENTIAL' -H 'content-type: application/json' -d '{"version":1,"status":"activated"}'</code></pre>
+  </section>
+
+  <div id="cases"></div>
+</main>
+
+<script>
+const U = "https://addifytv.nu";
+// need: "sa" = Super Admin, "player" = real or pretend player, "mail" = second inbox
+const GROUPS = [
+  { title: "A. Sign in and password", spec: "Spec 4.1 Account model, 19.2 Security", cases: [
+    { t: "Sign in", url: "/login", steps: ["Type your email and password.", "Click Sign In."], exp: "You land on the Overview page (/portal). Your name and role show at the bottom left." },
+    { t: "Wrong password is refused", url: "/login", steps: ["Type your email and a wrong password.", "Click Sign In."], exp: "A red message says \"Incorrect email or password.\" You stay on the login page." },
+    { t: "Badly typed email is caught", url: "/login", steps: ["Type an email without @ (for example: testuser).", "Click Sign In."], exp: "\"Enter a valid email address\" shows under the field. Nothing is sent." },
+    { t: "Too many wrong tries are slowed down", url: "/login", steps: ["Sign in with a wrong password 11 times quickly."], exp: "After about 10 tries you see \"Too many attempts. Please wait…\". After a minute you can try again." },
+    { t: "Forgot password email", url: "/forgot-password", need: ["mail"], steps: ["Type your email and submit.", "Open your inbox (check spam the first time)."], exp: "An email from \"AddifyTv <no-reply@addifytv.nu>\" arrives within a minute or two, with a button to set a new password." },
+    { t: "Set a new password from the email", url: "/forgot-password", need: ["mail"], steps: ["Click the link in the email.", "Type a new password twice and save.", "Sign in with the new password.", "Try the old password."], exp: "The new password works. The old password no longer works." },
+    { t: "A reset link works only once", url: "/login", need: ["mail"], steps: ["Click the same email link again."], exp: "The page says the link has expired and offers \"Request a New Link\"." },
+    { t: "Weak passwords are refused", url: "/portal/account?tab=security", steps: ["Open Change password.", "Try these new passwords one by one: 1234567 (too short), abcdefgh (no number), 12345678 (no letter), password1 (too common), your own email name + 123."], exp: "Each one is refused with a clear reason under the field. The password does not change." },
+    { t: "Change password", url: "/portal/account?tab=security", steps: ["Type a wrong current password and a good new one. Save.", "Then type the right current password and a good new one. Save."], exp: "First try: error under \"Current password\". Second try: saved, and you are asked to sign in again." },
+    { t: "Sign out", url: "/portal", steps: ["Click your name at the bottom left, then Sign out.", "Press the browser Back button.", "Open https://addifytv.nu/portal directly."], exp: "You are on the login page. Back does not show the portal. Opening /portal sends you to login." },
+    { t: "The address is secure", url: "/login", steps: ["Look at the address bar.", "Open http://addifytv.nu (with http, not https)."], exp: "A padlock shows. The http address switches to https by itself." },
+  ]},
+  { title: "B. Overview", spec: "Spec 14.2 Overview", cases: [
+    { t: "Overview shows your own numbers", url: "/portal", steps: ["Open Overview."], exp: "You see your company name, \"x of y screen licences used\", and counts for Total, Online and Offline screens. Only your company's screens are counted." },
+    { t: "Empty state when nothing is paired", url: "/portal", steps: ["With no screens paired, read the Screen Status box.", "Click \"Pair your first screen\"."], exp: "It says \"No screens paired yet\" and the link opens the pairing page." },
+    { t: "Recent activity", url: "/portal", steps: ["Do something (upload a file or rename a playlist).", "Come back to Overview."], exp: "Your action appears at the top of Recent Activity with the time." },
+    { t: "Quick publish", url: "/portal", need: ["player"], steps: ["In Quick Publish pick a screen, then a playlist, then confirm."], exp: "It finishes with a published message. The screen now shows that playlist as its content." },
+  ]},
+  { title: "C. Screens and pairing", spec: "Spec 5.1 Pairing, 5.2 Screen record, 5.4 Monitoring, 4.2 Licence", cases: [
+    { t: "Pair a screen", url: "/portal/screens/pair", need: ["player"], steps: ["Get a pairing code from the player (or pretend-player step 1).", "Type the code and continue.", "Give the screen a name, a location, an orientation and a tag. Click Pair Screen."], exp: "\"… paired\" is shown. The screen appears in Screens. Overview shows one more licence used." },
+    { t: "A wrong code is refused", url: "/portal/screens/pair", steps: ["Type ABCDEF (or any code that is not real) and continue.", "Fill in a name and click Pair Screen."], exp: "You are taken back to the code step with a message that the code is not valid." },
+    { t: "The code box only takes code characters", url: "/portal/screens/pair", steps: ["Type small letters, spaces, dashes and more than 6 characters."], exp: "The box turns letters into capitals, ignores spaces and dashes, and stops at 6 characters." },
+    { t: "An old code is refused", url: "/portal/screens/pair", need: ["player"], steps: ["Get a code, wait 6 minutes, then try to pair with it."], exp: "A message says the code has expired and to restart pairing on the screen." },
+    { t: "A used code cannot be used again", url: "/portal/screens/pair", need: ["player"], steps: ["After pairing a screen, try the same code again."], exp: "It is refused. No second screen is created." },
+    { t: "Screen name is required", url: "/portal/screens/pair", need: ["player"], steps: ["Enter a valid code, leave the name empty, click Pair Screen."], exp: "\"Required\" (or a minimum length message) shows under the name. The screen is not paired." },
+    { t: "Screen list and filters", url: "/portal/screens", need: ["player"], steps: ["Open Screens.", "Use the search box and the All / Online / Offline / Error buttons and the group filter."], exp: "Each screen shows its name, location, status, content and last seen. The list changes to match the search and filter." },
+    { t: "Screen details", url: "/portal/screens", need: ["player"], steps: ["Click a screen to open it."], exp: "You see name, Online/Offline, location, current content, group, orientation, last seen, and device details (model, app version). The IP address is partly hidden." },
+    { t: "Edit a screen", url: "/portal/screens", need: ["player"], steps: ["Open a screen, click Edit Screen.", "Change the name, location, orientation and tags. Save.", "Then try to save with an empty name."], exp: "Changes are saved and shown. An empty name is refused." },
+    { t: "Online and Offline status", url: "/portal/screens", need: ["player"], steps: ["Keep the Screens page open.", "Turn the player on (or run pretend-player step 3).", "Then turn it off and wait about 2 minutes."], exp: "The screen turns Online by itself, without reloading the page. After the player stops, it turns Offline and \"last seen\" shows when." },
+    { t: "Refresh a screen from the portal", url: "/portal/screens", need: ["player"], steps: ["Open a screen and click Refresh."], exp: "You get a confirmation. The action appears in Recent Activity." },
+    { t: "Licence limit stops extra screens", url: "/portal/screens/pair", need: ["sa", "player"], steps: ["As Super Admin, set this company's Maximum Screens to the number already paired.", "As the company user, try to pair one more screen."], exp: "Pairing is refused with a clear message that the licence limit is reached. No screen is added." },
+    { t: "Unpair a screen", url: "/portal/screens", need: ["player"], steps: ["Open a screen, click Unpair and confirm.", "Check Overview.", "Run pretend-player step 3 with the old key."], exp: "You are taken back to the list and the screen is gone. One licence is free again. The old key is refused." },
+  ]},
+  { title: "D. Screen groups", spec: "Spec 5.3 Screen groups", cases: [
+    { t: "Create a group", url: "/portal/screens/groups/new", need: ["player"], steps: ["Type a name and a description, tick one or more screens, save."], exp: "The group is created and shows its screens and how many are online." },
+    { t: "Group name rules", url: "/portal/screens/groups/new", steps: ["Try to save with no name.", "Try a name that another of your groups already has."], exp: "Both are refused with a message. No group is created." },
+    { t: "Add and remove screens", url: "/portal/screens", need: ["player"], steps: ["Open Screen Groups, open a group, edit it.", "Add one screen and remove another. Save."], exp: "The group shows the new list of screens." },
+    { t: "Delete a group", url: "/portal/screens", need: ["player"], steps: ["Delete a group and confirm."], exp: "You return to the list and the group is gone. Its screens are still in Screens; nothing was unpaired." },
+  ]},
+  { title: "E. Media library", spec: "Spec 6.1 Supported media, 16.3 Upload states, 19.2 File checks", cases: [
+    { t: "Upload a JPG", url: "/portal/media", steps: ["Click Upload Media, choose a JPG, upload."], exp: "You see progress, then the file appears as Ready with a small picture (thumbnail)." },
+    { t: "Upload a PNG", url: "/portal/media", steps: ["Upload a PNG."], exp: "It becomes Ready with a thumbnail." },
+    { t: "Upload an MP4 video", url: "/portal/media", steps: ["Upload a short MP4."], exp: "It shows Processing for a moment, then Ready by itself, with a thumbnail and its length (for example 00:12)." },
+    { t: "Upload a PDF", url: "/portal/media", steps: ["Upload a PDF with 2 or more pages."], exp: "It becomes Ready and shows the number of pages. The first page is the thumbnail." },
+    { t: "Files that are not allowed", url: "/portal/media", steps: ["In the upload window add a .txt, .zip or .html file."], exp: "That file is marked as not supported straight away, before uploading, and is not sent." },
+    { t: "Several files with tags", url: "/portal/media", steps: ["Add 3 files at once.", "Type tags separated by commas (for example: menu, summer). Upload."], exp: "All three upload. Each shows the tags in its details." },
+    { t: "The same file twice", url: "/portal/media", steps: ["In the upload window add the same file two times."], exp: "It is listed only once, with a note that a duplicate was skipped." },
+    { t: "Upload fails clearly", url: "/portal/media", steps: ["Start uploading a large video, then switch off your internet."], exp: "That file shows an error in its row. After turning internet back on you can try again. Nothing half-uploaded shows as Ready." },
+    { t: "Search and filter", url: "/portal/media", steps: ["Type part of a file name in the search box.", "Click Images, Videos, PDFs.", "Switch between grid and list view."], exp: "Only matching files show. The counters (Total, Ready, Processing, Failed) stay correct." },
+    { t: "File details", url: "/portal/media", steps: ["Click a file to open its details."], exp: "You see a preview, type, size, dimensions or length, who uploaded it, tags, and where it is used." },
+    { t: "Rename a file", url: "/portal/media", steps: ["Rename a file.", "Try to save an empty name."], exp: "The new name is saved. An empty name is refused." },
+    { t: "Delete an unused file", url: "/portal/media", steps: ["Delete a file that is not in any playlist. Confirm."], exp: "The file disappears and the Total goes down by one." },
+    { t: "A file in use is protected", url: "/portal/media", steps: ["Put a file in a playlist (see F2).", "Try to delete that file."], exp: "You are told it is in use and where. It is not silently removed from the playlist." },
+  ]},
+  { title: "F. Playlists", spec: "Spec 6.2 Playlists", cases: [
+    { t: "Create a playlist", url: "/portal/playlists", steps: ["Click Create Playlist, type a name, confirm."], exp: "The editor opens with an empty timeline and your media on the left." },
+    { t: "Add image, video and PDF", url: "/portal/playlists", steps: ["Open a playlist.", "Click + on an image, a video and a PDF.", "Click Save."], exp: "All three are in the timeline in the order you added them. \"Playlist saved\" shows. The total time is updated." },
+    { t: "Change the order", url: "/portal/playlists", steps: ["Move an item up and another down.", "Save, leave the page, and come back."], exp: "The new order is kept." },
+    { t: "Set how long an item shows", url: "/portal/playlists", steps: ["Change an image's seconds to 20. Save.", "Then try 0, then letters, then 99999."], exp: "20 is saved. The other values are refused with a message on that row, and Save and Publish are blocked until fixed." },
+    { t: "Remove an item", url: "/portal/playlists", steps: ["Remove one item from the timeline. Save."], exp: "It is gone from the playlist. The file is still in the Media library." },
+    { t: "Unsaved changes are not published", url: "/portal/playlists", steps: ["Change the playlist but do not save.", "Look at the buttons."], exp: "The buttons read \"Save & Preview\" and \"Save & Publish\", so your changes are saved first." },
+    { t: "Preview", url: "/portal/playlists", steps: ["Click Preview.", "Use play, next and previous."], exp: "Items play in order, each for its own time." },
+    { t: "Rename a playlist", url: "/portal/playlists", steps: ["Rename a playlist.", "Try an empty name.", "Try the name of another playlist."], exp: "A good name is saved. An empty name and a name already used are refused." },
+    { t: "Duplicate a playlist", url: "/portal/playlists", steps: ["Use the menu (…) on a playlist and choose Duplicate."], exp: "A copy appears named \"… (copy)\" with the same items." },
+    { t: "Delete a playlist", url: "/portal/playlists", steps: ["Delete a playlist that is not on any screen."], exp: "It is removed from the list." },
+    { t: "A playlist in use is protected", url: "/portal/playlists", need: ["player"], steps: ["Publish a playlist to a screen (G1).", "Try to delete that playlist."], exp: "You are told it is assigned to screens and must be unassigned first. It is not deleted." },
+    { t: "Empty playlist", url: "/portal/playlists", need: ["player"], steps: ["Create a playlist with no items.", "Try to publish it."], exp: "Publish is not possible: the buttons are disabled or you are told to add items first." },
+  ]},
+  { title: "G. Publishing to screens", spec: "Spec 6.2 Publish, 7.1 Real-time", cases: [
+    { t: "Publish to one screen", url: "/portal/playlists", need: ["player"], steps: ["Open a playlist, click Publish.", "Choose Publish Now, pick one screen, Review, confirm."], exp: "\"Published!\" is shown. If the screen is off it says Pending (it will sync when it reconnects). If it is on it says Syncing." },
+    { t: "Publish to several screens", url: "/portal/playlists", need: ["player"], steps: ["Publish a playlist and tick two or more screens."], exp: "All chosen screens are listed in the summary and each gets the playlist." },
+    { t: "Publish to a group", url: "/portal/playlists", need: ["player"], steps: ["Publish a playlist and choose a screen group."], exp: "Every screen in the group gets the playlist." },
+    { t: "The screen receives it", url: "/portal/screens", need: ["player"], steps: ["After publishing, look at the real screen (or run pretend-player step 4, then step 5).", "Open the screen in the portal."], exp: "The screen plays the playlist (step 4 lists its items and download links). After step 5 the portal shows the content as Synced." },
+    { t: "Publish from a screen's page", url: "/portal/screens", need: ["player"], steps: ["Open a screen, click Publish Content, choose a playlist, confirm."], exp: "The screen's Current Assignment changes to that playlist." },
+    { t: "A newer publish replaces the old one", url: "/portal/playlists", need: ["player"], steps: ["Publish playlist A to a screen, then playlist B to the same screen."], exp: "The screen shows playlist B. The version number goes up." },
+    { t: "Editing a published playlist", url: "/portal/playlists", need: ["player"], steps: ["Add an item to a playlist that is on a screen. Save."], exp: "The screen gets the change (step 4 shows the new item) without publishing again." },
+  ]},
+  { title: "H. Scheduling", spec: "Spec 6.3 Scheduling", cases: [
+    { t: "Schedule a playlist", url: "/portal/playlists", need: ["player"], steps: ["Open a playlist, click Publish, choose Schedule.", "Pick a screen, a start date and time later today, and an end time. Confirm."], exp: "It is saved as Scheduled. The time zone is shown and the times are in that zone." },
+    { t: "End must be after start", url: "/portal/playlists", need: ["player"], steps: ["Set the end before the start and continue."], exp: "\"Must be after the start\" shows. Nothing is saved." },
+    { t: "No start in the past", url: "/portal/playlists", need: ["player"], steps: ["Set the start to yesterday and continue."], exp: "It is refused with a message about the start time." },
+    { t: "No end date", url: "/portal/playlists", need: ["player"], steps: ["Schedule with a start and leave the end empty."], exp: "It is saved and runs from the start with no end." },
+    { t: "Overlapping schedules", url: "/portal/playlists", need: ["player"], steps: ["Schedule playlist A on a screen for 10:00 to 12:00 tomorrow.", "Schedule playlist B on the same screen for 11:00 to 13:00 tomorrow."], exp: "The second one is refused with a message that it overlaps an existing schedule." },
+    { t: "Time zone", url: "/portal/playlists", need: ["player"], steps: ["Change the time zone in the schedule form and look at the summary."], exp: "The summary shows the times in the zone you chose." },
+    { t: "Schedule ends and the old content returns", url: "/portal/screens", need: ["player"], steps: ["Publish playlist A to a screen.", "Schedule playlist B on it for the next 5 minutes only.", "Wait until it ends, then check the screen."], exp: "During the schedule the screen shows B. When it ends it goes back to A." },
+  ]},
+  { title: "I. Layouts", spec: "Spec 6.4 Multi-zone layouts", cases: [
+    { t: "See the layout presets", url: "/portal/layouts", steps: ["Open Layouts / Templates."], exp: "Ready-made layouts are shown (Full Screen, Main + Sidebar, Split Screen and others) with a small drawing of each." },
+    { t: "Use a layout", url: "/portal/layouts", steps: ["Choose a layout and give it a name.", "For each zone pick a playlist or a media file. Save."], exp: "The preview shows each zone with its content. The layout is saved under your company." },
+    { t: "Layout name rules", url: "/portal/layouts", steps: ["Try to save a layout with no name, and with a name you already used."], exp: "Both are refused with a message." },
+    { t: "You cannot draw your own zones", url: "/portal/layouts", steps: ["Look for a way to move or resize zones."], exp: "There is none: only the ready-made layouts can be used." },
+    { t: "Publish a layout", url: "/portal/layouts", need: ["player"], steps: ["Publish the layout to a screen."], exp: "The screen's content becomes that layout (pretend-player step 4 lists the zones)." },
+  ]},
+  { title: "J. Templates", spec: "Spec 10 Promotional templates", cases: [
+    { t: "Open a template", url: "/portal/layouts", need: ["sa"], steps: ["(Super Admin must have created at least one template.)", "Open Layouts / Templates and click a template."], exp: "A form shows only the fields you may change (for example title, price, picture) next to a preview." },
+    { t: "Preview changes as you type", url: "/portal/layouts", need: ["sa"], steps: ["Type in a text field."], exp: "The preview updates straight away." },
+    { t: "Field limits", url: "/portal/layouts", need: ["sa"], steps: ["Leave a required field empty and save.", "Type more characters than the field allows."], exp: "An empty required field is refused. The box stops at the maximum length." },
+    { t: "Colour and picture fields", url: "/portal/layouts", need: ["sa"], steps: ["Pick a colour with the swatch, or type a colour like #1a73e8.", "Choose a picture from your Media library."], exp: "Only valid colours are accepted. Only your own images are offered." },
+    { t: "Save a template design", url: "/portal/layouts", need: ["sa"], steps: ["Give it a name and save."], exp: "It is saved. After a short moment it is ready to publish to a screen." },
+    { t: "The design itself is locked", url: "/portal/layouts", need: ["sa"], steps: ["Try to move text, change fonts or add shapes."], exp: "Not possible. Only the listed fields can be changed." },
+  ]},
+  { title: "K. Offers", spec: "Spec 11 Offers / Marketplace, 11.2 Statistics", cases: [
+    { t: "No offers yet", url: "/portal/offers", steps: ["Open Offers when Super Admin has published none."], exp: "A friendly message says there are no offers. The page is not blank or broken." },
+    { t: "See published offers", url: "/portal/offers", need: ["sa"], steps: ["Super Admin creates an offer and publishes it.", "Open Offers as the company user."], exp: "The offer shows with its picture or colour tile, title and category." },
+    { t: "Drafts stay hidden", url: "/portal/offers", need: ["sa"], steps: ["Super Admin creates an offer but leaves it as Draft, or unpublishes one.", "Reload Offers."], exp: "That offer is not in the customer list." },
+    { t: "Search and categories", url: "/portal/offers", need: ["sa"], steps: ["Type in the search box.", "Click a category button."], exp: "The list narrows to matching offers." },
+    { t: "Offer details", url: "/portal/offers", need: ["sa"], steps: ["Click an offer."], exp: "You see the full description, what is included, the steps to buy, and who to contact (name, email, phone with flag)." },
+    { t: "Views are counted once", url: "/portal/offers", need: ["sa"], steps: ["Open an offer, reload the page 3 times.", "As Super Admin open that offer's statistics."], exp: "Total views went up by 1 for this visit, not by 4. Unique viewers counts you once." },
+  ]},
+  { title: "L. Scratch & Win", spec: "Spec 13 Scratch & Win, 13.1 Prize controls", cases: [
+    { t: "No campaign running", url: "/portal/scratch-win", steps: ["Open Scratch & Win when there is no active campaign."], exp: "A message says there is no active campaign." },
+    { t: "See an active campaign", url: "/portal/scratch-win", need: ["sa"], steps: ["Super Admin creates a campaign with prizes and activates it.", "Open Scratch & Win as the company user."], exp: "You see the title, description, end date, the prizes, and how many tries you have." },
+    { t: "Offers must be visited first (if the rule is on)", url: "/portal/scratch-win", need: ["sa"], steps: ["Super Admin turns on \"visit Offers first\".", "Without opening Offers, click Play Now.", "Then open an offer and try again."], exp: "First try is refused with \"Visit the Offers page before playing\". After visiting an offer, playing works." },
+    { t: "Play", url: "/portal/scratch-win", need: ["sa"], steps: ["Click Play Now and scratch the card."], exp: "It shows either a prize or \"no prize this time\". Your tries go down by one." },
+    { t: "No double prize", url: "/portal/scratch-win", need: ["sa"], steps: ["Click Play Now twice very quickly, or reload the page while it is revealing."], exp: "Only one result is given. You do not lose two tries or win twice." },
+    { t: "Tries run out", url: "/portal/scratch-win", need: ["sa"], steps: ["Play until your tries are used."], exp: "Play is disabled with a message that all attempts are used." },
+    { t: "Winner is recorded", url: "/portal/scratch-win", need: ["sa"], steps: ["After a win, Super Admin opens the campaign's winners."], exp: "Your win is listed with the prize and time. The prize's remaining quantity went down by one and never goes below zero." },
+    { t: "Campaign ends", url: "/portal/scratch-win", need: ["sa"], steps: ["Super Admin deactivates the campaign.", "Reload Scratch & Win."], exp: "The campaign can no longer be played." },
+  ]},
+  { title: "M. Account and users", spec: "Spec 14.2 Account, 4.1 Accounts", cases: [
+    { t: "Open your profile from the sidebar", url: "/portal", steps: ["Click your name at the bottom left.", "Click My profile."], exp: "The menu opens above your name. My profile opens Account on the Profile tab." },
+    { t: "Edit your profile", url: "/portal/account?tab=profile", steps: ["Change your name and job title.", "Add a phone number: pick a country with its flag, type the number. Save."], exp: "Saved. The name at the bottom left updates. The phone shows with the country flag." },
+    { t: "Phone number rules", url: "/portal/account?tab=profile", steps: ["Type a number that is too short and save.", "Type more digits than the country allows."], exp: "A short number is refused (\"Enter a valid phone number for the selected country\"). Extra digits are not accepted." },
+    { t: "Company details", url: "/portal/account?tab=company", steps: ["Open the Company Settings tab."], exp: "You see your company's details and licence (screens used and allowed). No other company's details." },
+    { t: "Invite a user by email", url: "/portal/account?tab=users", need: ["mail"], steps: ["Click Add user. Type a name and an email you can open. Choose a role.", "Leave the password empty. Save.", "Open that inbox and click the link. Set a password and sign in."], exp: "The user shows as Invited. The email arrives from AddifyTv. After setting a password they can sign in and the status becomes Active." },
+    { t: "Add a user with a password", url: "/portal/account?tab=users", steps: ["Add a user and type a temporary password.", "Sign in as that user in a private window."], exp: "The user is Active straight away and can sign in. No email is sent in this case." },
+    { t: "Same email twice", url: "/portal/account?tab=users", steps: ["Add a user with an email that already exists."], exp: "Refused with a message that a user with this email already exists." },
+    { t: "Viewer role can only look", url: "/portal", steps: ["Add a user with role Viewer and sign in as them.", "Try to upload media, create a playlist, publish, and open the Users tab."], exp: "They can see screens, media and playlists, but cannot change anything. The Users tab is not available." },
+    { t: "Editor role manages content, not users", url: "/portal", steps: ["Add a user with role Editor and sign in as them.", "Upload a file, create a playlist, then try to add a user."], exp: "Content actions work. They cannot add, edit or remove users." },
+    { t: "Deactivate a user", url: "/portal/account?tab=users", steps: ["While that user is signed in (another browser), deactivate them.", "In their browser, click anything."], exp: "They are signed out at once and cannot sign in again until reactivated." },
+    { t: "You cannot lock yourself out", url: "/portal/account?tab=users", steps: ["Try to deactivate yourself, or change your own role, or remove the only Admin."], exp: "Refused with a clear message." },
+    { t: "Remove a user", url: "/portal/account?tab=users", steps: ["Remove a user and confirm."], exp: "They leave the list and can no longer sign in." },
+  ]},
+  { title: "N. Your data stays yours", spec: "Spec 3.1 Tenant isolation, 19.2 Security", cases: [
+    { t: "The admin area is closed to you", url: "/companies", steps: ["While signed in as the company user, open /companies, /licenses, /activity and /settings."], exp: "Each time you are sent back to your own portal. No admin data is shown." },
+    { t: "Another company's pages", url: "/portal/screens", need: ["sa"], steps: ["Ask Super Admin for the web address of a screen or playlist that belongs to a different company.", "Open it while signed in as your company user."], exp: "You see \"not found\". Nothing about the other company is shown." },
+    { t: "Only your items in every list", url: "/portal/media", need: ["sa"], steps: ["Super Admin creates a second company with its own media and playlist.", "Check your Screens, Media, Playlists and Layouts lists."], exp: "Only your company's items appear." },
+    { t: "Media links are private", url: "/portal/media", steps: ["Right-click a media picture and copy its address.", "Look at the address."], exp: "It is a long signed link that expires. There is no simple public address for your files." },
+  ]},
+  { title: "O. Licence and company status", spec: "Spec 4.2 Manual licence model", cases: [
+    { t: "Suspended company is read-only", url: "/portal", need: ["sa"], steps: ["Super Admin sets the company status to Suspended.", "As the company user: sign in, open pages, then try to upload a file and create a playlist."], exp: "You can still sign in and look at everything. Every change is refused with a message that the account is read-only." },
+    { t: "Suspended licence blocks pairing and publishing", url: "/portal", need: ["sa", "player"], steps: ["Super Admin sets the licence status to Suspended.", "Try to pair a screen and to publish a playlist."], exp: "Both are refused with a clear licence message. Your screens, media and playlists are all still there. Screens keep playing what they had." },
+    { t: "Back to normal", url: "/portal", need: ["sa"], steps: ["Super Admin sets company and licence back to Active.", "Reload and upload a file."], exp: "Everything works again. Nothing was lost." },
+    { t: "Limit lowered below paired screens", url: "/portal", need: ["sa", "player"], steps: ["With 2 screens paired, Super Admin sets Maximum Screens to 1."], exp: "No screen is deleted. A warning shows that the account is over its limit, and new pairing is blocked until the limit is raised or a screen is unpaired." },
+  ]},
+  { title: "P. Loading, empty and error states", spec: "Spec 16.3 Mandatory states", cases: [
+    { t: "Loading", url: "/portal/media", steps: ["Reload a page with a lot of content."], exp: "Grey placeholder shapes show briefly, then the content. No flash of \"empty\"." },
+    { t: "Lost connection", url: "/portal/screens", steps: ["Turn off your internet and reload, or click something."], exp: "A clear message says it could not load, with a Try again button. The page is not blank." },
+    { t: "Page that does not exist", url: "/portal/nothing-here", steps: ["Open this address."], exp: "A \"Page not found\" page with a link back." },
+    { t: "Item that does not exist", url: "/portal/screens/cmissing0000000000000000a", steps: ["Open this address."], exp: "A message says the item could not be found. The menu still works." },
+    { t: "Session ends", url: "/portal", steps: ["Stay signed in on two browsers. Change your password in one.", "Click something in the other."], exp: "The other browser is sent to the login page instead of showing errors." },
+    { t: "No double saves", url: "/portal/playlists", steps: ["When creating something, click the save button several times very quickly."], exp: "Only one item is created. The button shows it is busy." },
+  ]},
+  { title: "Q. Phone and small screens", spec: "Spec 15 Mobile (web parity), usability", cases: [
+    { t: "Open on a phone", url: "/portal", steps: ["Open the portal on a phone (or make the browser window narrow).", "Tap the menu button (top left)."], exp: "The menu slides in. Pages fit the screen with no sideways scrolling." },
+    { t: "Forms on a phone", url: "/portal/screens/pair", steps: ["Tap into text boxes and fill a form."], exp: "The page does not zoom in when you tap a box. Buttons are big enough to tap. Pop-up windows open from the bottom." },
+    { t: "Logo goes home", url: "/portal/account", steps: ["Click \"SignageHub\" at the top of the menu."], exp: "You go to the Overview page." },
+  ]},
+];
+
+const API = "/qa/api/results";
+const state = {};                       // id -> { r, n, by, at }
+let me = localStorage.getItem("qa-name") || "";
+let code = localStorage.getItem("qa-code") || "";
+const NEED = { sa: "Needs Super Admin", player: "Needs a player", mail: "Needs a second inbox" };
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const sync = document.getElementById("sync");
+const setSync = (text, bad) => { sync.textContent = text; sync.classList.toggle("bad", !!bad); };
+const when = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); };
+
+async function call(method, url, body) {
+  const res = await fetch(url, { method, headers: { "x-qa-key": code, ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+  if (res.status === 401) throw Object.assign(new Error("Wrong access code"), { auth: true });
+  if (!res.ok) throw new Error(`Server error (${res.status})`);
+  return res.json();
+}
+
+const root = document.getElementById("cases");
+const all = [];
+GROUPS.forEach((g) => {
+  const letter = g.title[0];
+  const h = el("h2", "", `${esc(g.title)} <small>· ${esc(g.spec)}</small>`);
+  const card = el("section", "card");
+  root.append(h, card);
+  g.cases.forEach((c, i) => {
+    const id = `${letter}${i + 1}`;
+    state[id] = { r: "", n: "", by: "", at: "" };
+    const row = el("div", "tc"); row.dataset.id = id;
+    const needs = (c.need || []).map((n) => `<span class="need">${NEED[n]}</span>`).join("");
+    const left = el("div", "", `
+      <h4><span class="id">${id}</span>${esc(c.t)}</h4>
+      <div class="meta">${needs}Open: <a href="${U + c.url}" target="_blank" rel="noopener">${U + c.url}</a></div>
+      <ol>${c.steps.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
+      <div class="exp"><b>You should see:</b> ${esc(c.exp)}</div>`);
+    const res = el("div", "res", `
+      <div class="btns"><button class="pass" type="button">Pass</button><button class="fail" type="button">Fail</button></div>
+      <textarea placeholder="Notes (what happened)" aria-label="Notes for ${id}" maxlength="2000"></textarea>
+      <div class="who"></div>`);
+    const [pass, fail] = res.querySelectorAll("button"); const note = res.querySelector("textarea"); const who = res.querySelector(".who");
+    const paint = () => {
+      const s = state[id];
+      pass.setAttribute("aria-pressed", s.r === "pass"); fail.setAttribute("aria-pressed", s.r === "fail");
+      if (document.activeElement !== note) note.value = s.n;
+      who.textContent = s.at ? `${s.by || "Someone"} · ${when(s.at)}` : "";
+    };
+    let timer;
+    const push = async () => {
+      setSync("Saving…");
+      const sent = { r: state[id].r, n: state[id].n };
+      try {
+        const out = await call("PUT", `${API}/${id}`, { ...sent, by: me });
+        // Keep what the tester has typed since; only take who/when from the server.
+        state[id].by = out.saved.by; state[id].at = out.saved.at; paint();
+        if (state[id].r !== sent.r || state[id].n !== sent.n) { clearTimeout(timer); timer = setTimeout(push, 300); } else setSync("All changes saved");
+      }
+      catch (e) { setSync(e.auth ? "Access code no longer valid. Click Change tester." : "Not saved. Check your connection; it will retry.", true); if (!e.auth) { clearTimeout(timer); timer = setTimeout(push, 5000); } }
+    };
+    pass.onclick = () => { state[id].r = state[id].r === "pass" ? "" : "pass"; paint(); update(); push(); };
+    fail.onclick = () => { state[id].r = state[id].r === "fail" ? "" : "fail"; paint(); update(); push(); };
+    note.oninput = () => { state[id].n = note.value; clearTimeout(timer); timer = setTimeout(push, 700); };
+    paint();
+    row.append(left, res); card.append(row);
+    all.push({ id, title: c.t, row, paint });
+  });
+});
+
+let filter = "all";
+function update() {
+  const p = all.filter((c) => state[c.id].r === "pass").length, f = all.filter((c) => state[c.id].r === "fail").length, n = all.length;
+  document.getElementById("mp").style.width = (p / n * 100) + "%";
+  document.getElementById("mf").style.width = (f / n * 100) + "%";
+  document.getElementById("count").textContent = `${p} passed · ${f} failed · ${n - p - f} not tested · ${n} tests`;
+  all.forEach((c) => c.row.classList.toggle("hidden", filter === "todo" ? !!state[c.id].r : filter === "fail" ? state[c.id].r !== "fail" : false));
+  document.querySelectorAll("#cases > section").forEach((sec) => { const any = [...sec.children].some((r) => !r.classList.contains("hidden")); sec.classList.toggle("hidden", !any); sec.previousElementSibling.classList.toggle("hidden", !any); });
+}
+document.querySelectorAll("[data-filter]").forEach((b) => b.onclick = () => { filter = b.dataset.filter; document.querySelectorAll("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", x === b)); update(); });
+document.getElementById("copy").onclick = async (e) => {
+  const failed = all.filter((c) => state[c.id].r === "fail").map((c) => `${c.id} ${c.title}${state[c.id].n ? " — " + state[c.id].n.replace(/\s+/g, " ") : ""}${state[c.id].by ? " (" + state[c.id].by + ")" : ""}`);
+  const text = failed.length ? "Failed tests:\n" + failed.join("\n") : "No failed tests.";
+  try { await navigator.clipboard.writeText(text); e.target.textContent = "Copied"; } catch { setSync("Couldn't copy. Select the failed tests and copy them by hand.", true); }
+  setTimeout(() => (e.target.textContent = "Copy failed list"), 1500);
+};
+
+// Load everyone's results, then keep them fresh so you see other testers' marks.
+async function load() {
+  const { results } = await call("GET", API);
+  for (const c of all) { const s = results[c.id]; const typing = document.activeElement?.closest?.(".tc")?.dataset.id === c.id; if (s && !typing) state[c.id] = s; c.paint(); }
+  update();
+}
+const gate = document.getElementById("gate"), msg = document.getElementById("gatemsg");
+async function start() {
+  try { await load(); } catch (e) { document.body.classList.add("locked"); gate.classList.remove("hidden"); msg.textContent = e.auth ? "That access code isn't right." : "Couldn't reach the results server. Try again in a moment."; return; }
+  document.body.classList.remove("locked"); gate.classList.add("hidden"); setSync(`Signed in as ${me}`);
+  setInterval(() => load().catch(() => setSync("Offline: showing the last results loaded.", true)), 20000);
+}
+document.getElementById("gateform").onsubmit = (ev) => {
+  ev.preventDefault(); msg.textContent = "";
+  me = document.getElementById("who").value.trim(); code = document.getElementById("code").value.trim();
+  if (!me || !code) { msg.textContent = "Enter your name and the access code."; return; }
+  localStorage.setItem("qa-name", me); localStorage.setItem("qa-code", code); start();
+};
+document.getElementById("signout").onclick = () => { localStorage.removeItem("qa-name"); localStorage.removeItem("qa-code"); location.reload(); };
+document.body.classList.add("locked");
+if (me && code) start(); else update();
+</script>
+</body>
+</html>

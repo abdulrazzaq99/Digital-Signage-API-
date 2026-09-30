@@ -97,6 +97,18 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # Results store for the QA checklist served at /qa (docker/qa/server.mjs). Off until QA_KEY is set.
+  qa:
+    image: node:22-alpine
+    command: ["node", "/app/server.mjs"]
+    environment:
+      QA_KEY: ${QA_KEY:-}
+    volumes:
+      - ./qa/server.mjs:/app/server.mjs:ro
+      - qadata:/data
+    restart: unless-stopped
+    logging: *logging
+
   caddy:
     image: caddy:2-alpine
     environment:
@@ -109,11 +121,12 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./previews:/srv/previews:ro
       - caddydata:/data
-    depends_on: [api, web]
+    depends_on: [api, web, qa]
     restart: unless-stopped
     logging: *logging
 
 volumes:
   pgdata:
+  qadata:
   redisdata:
   caddydata:

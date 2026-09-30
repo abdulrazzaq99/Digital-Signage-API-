@@ -21,6 +21,16 @@
 		rewrite * {path}.html
 		file_server
 	}
+	# QA checklist for the customer portal: static page at /qa, shared results from the qa service.
+	handle /qa/api/* {
+		reverse_proxy qa:8080
+	}
+	@qa path /qa /qa/
+	handle @qa {
+		root * /srv/previews
+		rewrite * /qa.html
+		file_server
+	}
 	handle {
 		reverse_proxy web:3000
 	}
