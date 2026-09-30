@@ -66,6 +66,7 @@
   #sync.bad { color:var(--bad); font-weight:600; }
   body.locked #cases, body.locked .bar { display:none; }
   body:not(.locked) #lockednote { display:none; }
+  #player { scroll-margin-top:90px; }
   .how { margin:6px 0 10px; padding-left:22px; }
   .screens { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin:14px 0 6px; }
   .ps { border:1px solid var(--line); border-radius:10px; padding:12px; min-width:0; }
@@ -130,17 +131,17 @@
       <tr><td>A company admin login</td><td>The user you added to the company "Test" (role Admin). Sign in at <a href="https://addifytv.nu/login" target="_blank" rel="noopener">https://addifytv.nu/login</a>.</td></tr>
       <tr><td>The Super Admin login</td><td><code>admin@addifytv.com</code>. Only for tests marked <span class="need">Needs Super Admin</span>. Use a second browser or a private window so both can stay signed in.</td></tr>
       <tr><td>Test files</td><td>One JPG, one PNG, one short MP4 video, one PDF with 2 or more pages, and one file that is not allowed (for example a <code>.txt</code> or <code>.zip</code>).</td></tr>
-      <tr><td>A screen</td><td>A real Android player, or the Pretend screen boxes below (tests marked <span class="need">Needs a screen</span>).</td></tr>
+      <tr><td>A screen</td><td>A real Android player, or the <a href="#player">Pretend screen boxes</a> beside test C1 (tests marked <span class="need">Needs a screen</span>).</td></tr>
       <tr><td>A second email inbox</td><td>To receive an invitation and a password-reset email.</td></tr>
     </table>
   </section>
 
   <section class="card" id="player">
-    <h3>Pretend screen (if you have no real screen)</h3>
-    <p class="lead">These two boxes behave like real screens. Nothing to install and nothing to type: just use the buttons.</p>
+    <h3>Pretend screen for test C1 and every test marked <span class="need">Needs a screen</span></h3>
+    <p class="lead">If you have no real screen, use these two boxes. They behave like real screens. Nothing to install and nothing to type: just use the buttons.</p>
     <ol class="how">
       <li>Click <b>Get a pairing code</b>. A 6-character code appears in the box.</li>
-      <li>In the portal, open Screens, then Pair Screen, and type that code (test C1).</li>
+      <li>In the portal, open Screens, then Pair Screen, and type that code (this is test C1, just below).</li>
       <li>The box pairs by itself and the portal shows the screen as Online. Whatever you publish to it plays in the box.</li>
     </ol>
     <p class="lead">Keep this page open in its own tab while you test: the screen is only Online while this page is open. Use the second box for tests that need two screens.</p>
@@ -383,12 +384,16 @@ async function call(method, url, body) {
 }
 
 const root = document.getElementById("cases");
+const groups = [];
 const all = [];
 GROUPS.forEach((g) => {
   const letter = g.title[0];
   const h = el("h2", "", `${esc(g.title)} <small>· ${esc(g.spec)}</small>`);
   const card = el("section", "card");
   root.append(h, card);
+  groups.push({ h, card });
+  // The pretend screens sit with the first tests that use them (C1, pairing), not at the top of the page.
+  if (letter === "C") root.insertBefore(document.getElementById("player"), card);
   g.cases.forEach((c, i) => {
     const id = `${letter}${i + 1}`;
     state[id] = { r: "", n: "", by: "", at: "" };
@@ -438,7 +443,7 @@ function update() {
   document.getElementById("mf").style.width = (f / n * 100) + "%";
   document.getElementById("count").textContent = `${p} passed · ${f} failed · ${n - p - f} not tested · ${n} tests`;
   all.forEach((c) => c.row.classList.toggle("hidden", filter === "todo" ? !!state[c.id].r : filter === "fail" ? state[c.id].r !== "fail" : false));
-  document.querySelectorAll("#cases > section").forEach((sec) => { const any = [...sec.children].some((r) => !r.classList.contains("hidden")); sec.classList.toggle("hidden", !any); sec.previousElementSibling.classList.toggle("hidden", !any); });
+  groups.forEach(({ h, card }) => { const any = [...card.children].some((r) => !r.classList.contains("hidden")); card.classList.toggle("hidden", !any); h.classList.toggle("hidden", !any); });
 }
 document.querySelectorAll("[data-filter]").forEach((b) => b.onclick = () => { filter = b.dataset.filter; document.querySelectorAll("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", x === b)); update(); });
 document.getElementById("copy").onclick = async (e) => {
