@@ -22,7 +22,7 @@
   ol, ul { margin:6px 0; padding-left:22px; }
   li { margin:3px 0; }
   code, pre { font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
-  pre { background:var(--navy); color:#e8eef8; padding:12px 14px; border-radius:8px; overflow-x:auto; white-space:pre-wrap; word-break:break-all; margin:8px 0; }
+  pre { background:var(--navy); color:#e8eef8; padding:12px 14px; border-radius:8px; overflow-x:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:8px 0; }
   code { background:var(--tint); padding:1px 5px; border-radius:4px; }
   pre code { background:none; padding:0; }
   .bar { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid var(--line); padding:10px 16px; }
@@ -50,6 +50,12 @@
   textarea { width:100%; min-height:54px; font:inherit; font-size:13px; border:1px solid var(--line); border-radius:8px; padding:6px 8px; resize:vertical; }
   .tc.is-pass { background:linear-gradient(#fff,#fff); }
   .hidden { display:none; }
+  .os { display:inline-flex; gap:4px; border:1px solid var(--line); border-radius:10px; padding:3px; margin:4px 0 12px; }
+  .os button { border:0; padding:6px 16px; }
+  .os button[aria-selected="true"] { background:var(--navy); color:#fff; font-weight:600; }
+  pre { position:relative; padding-right:70px; }
+  pre .cp { position:absolute; top:6px; right:6px; padding:3px 10px; font-size:12px; background:#22345a; color:#fff; border-color:#22345a; }
+
   .who { font-size:12px; color:var(--muted); min-height:16px; }
   #gate form { display:flex; flex-wrap:wrap; gap:10px; align-items:end; }
   #gate label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); flex:1 1 200px; }
@@ -102,26 +108,57 @@
       <tr><td>A company admin login</td><td>The user you added to the company "Test" (role Admin). Sign in at <a href="https://addifytv.nu/login" target="_blank" rel="noopener">https://addifytv.nu/login</a>.</td></tr>
       <tr><td>The Super Admin login</td><td><code>admin@addifytv.com</code>. Only for tests marked <span class="need">Needs Super Admin</span>. Use a second browser or a private window so both can stay signed in.</td></tr>
       <tr><td>Test files</td><td>One JPG, one PNG, one short MP4 video, one PDF with 2 or more pages, and one file that is not allowed (for example a <code>.txt</code> or <code>.zip</code>).</td></tr>
-      <tr><td>A screen</td><td>A real Android player, or the "pretend player" commands below (tests marked <span class="need">Needs a player</span>).</td></tr>
+      <tr><td>A screen</td><td>A real Android player, or the "pretend player" commands below (Windows and Mac versions) (tests marked <span class="need">Needs a player</span>).</td></tr>
       <tr><td>A second email inbox</td><td>To receive an invitation and a password-reset email.</td></tr>
     </table>
   </section>
 
-  <section class="card">
+  <section class="card" id="player">
     <h3>Pretend player (if you have no real screen)</h3>
-    <p class="lead">Paste these in Terminal on a Mac. They do what the Android player does. Replace the words in CAPITALS with the values you get back.</p>
-    <b>1. Get a pairing code</b> (valid for 5 minutes)
-    <pre><code>curl -s -X POST https://api.addifytv.nu/api/v1/player/pairing-sessions -H 'content-type: application/json' -d '{"deviceId":"test-device-001","model":"Test player","playerVersion":"1.0.0"}'</code></pre>
-    It prints a <code>sessionId</code> and a 6-character <code>code</code>. Use the code in test C1. For a second screen, change <code>test-device-001</code> to <code>test-device-002</code>.
-    <br><br><b>2. After pairing in the portal, collect the screen's key</b>
-    <pre><code>curl -s https://api.addifytv.nu/api/v1/player/pairing-sessions/SESSION_ID</code></pre>
-    It prints a <code>credential</code>. Keep it; it is shown only once.
-    <br><br><b>3. Tell the portal the screen is on</b> (repeat every minute to stay Online)
-    <pre><code>curl -s -X POST https://api.addifytv.nu/api/v1/player/heartbeat -H 'authorization: Bearer CREDENTIAL' -H 'content-type: application/json' -d '{"state":"PLAYING","resolution":"1920x1080","playerVersion":"1.0.0"}'</code></pre>
-    <b>4. See what the screen was told to play</b>
-    <pre><code>curl -s https://api.addifytv.nu/api/v1/player/manifest -H 'authorization: Bearer CREDENTIAL'</code></pre>
-    <b>5. Confirm the screen received it</b> (use the <code>version</code> number from step 4)
-    <pre><code>curl -s -X POST https://api.addifytv.nu/api/v1/player/sync-ack -H 'authorization: Bearer CREDENTIAL' -H 'content-type: application/json' -d '{"version":1,"status":"activated"}'</code></pre>
+    <p class="lead">These commands do what the Android player does, so you can test pairing, online status and publishing without a real screen. Choose your computer:</p>
+    <div class="os" role="tablist" aria-label="Your computer">
+      <button type="button" role="tab" data-os="win" aria-selected="false">Windows</button>
+      <button type="button" role="tab" data-os="mac" aria-selected="false">Mac</button>
+    </div>
+
+    <div data-pane="win">
+      <p><b>How to open it:</b> click the <b>Start</b> button, type <code>PowerShell</code>, press <b>Enter</b>. A blue or black window opens. To paste a command, copy it here, <b>right-click</b> inside that window (or press <b>Ctrl+V</b>), then press <b>Enter</b>.</p>
+      <p><b>Keep the same window open</b> for all the steps: it remembers the screen's details, so you do not need to copy or replace anything.</p>
+      <b>0. Do this once when you open the window</b>
+      <pre><code>[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$api = "https://api.addifytv.nu/api/v1/player"</code></pre>
+      <b>1. Get a pairing code</b> (valid for 5 minutes)
+      <pre><code>$s = (Invoke-RestMethod -Method Post -Uri "$api/pairing-sessions" -ContentType "application/json" -Body '{"deviceId":"test-device-001","model":"Test player","playerVersion":"1.0.0"}').data; $s</code></pre>
+      It shows a <code>code</code> of 6 characters. Use that code in test C1. For a second screen, change <code>test-device-001</code> to <code>test-device-002</code>.
+      <br><br><b>2. After pairing in the portal, collect the screen's key</b>
+      <pre><code>$r = (Invoke-RestMethod -Uri "$api/pairing-sessions/$($s.sessionId)").data; if ($r.credential) { $key = $r.credential }; "Status: $($r.status)"; "Key: $key"</code></pre>
+      <code>Status: PAIRED</code> with a long key means it worked. <code>PENDING</code> means the screen is not paired yet: finish test C1, then run this again. <code>EXPIRED</code> means the 5 minutes ran out: run step 1 again for a new code.
+      <br><br><b>3. Tell the portal the screen is on</b> (run it again every minute to stay Online)
+      <pre><code>Invoke-RestMethod -Method Post -Uri "$api/heartbeat" -Headers @{ Authorization = "Bearer $key" } -ContentType "application/json" -Body '{"state":"PLAYING","resolution":"1920x1080","playerVersion":"1.0.0"}'</code></pre>
+      <b>4. See what the screen was told to play</b>
+      <pre><code>(Invoke-RestMethod -Uri "$api/manifest" -Headers @{ Authorization = "Bearer $key" }).data | ConvertTo-Json -Depth 8</code></pre>
+      Look for <code>version</code>, <code>items</code> and <code>assets</code> in what it prints.
+      <br><br><b>5. Confirm the screen received it</b> (put the <code>version</code> number from step 4 in place of 1)
+      <pre><code>Invoke-RestMethod -Method Post -Uri "$api/sync-ack" -Headers @{ Authorization = "Bearer $key" } -ContentType "application/json" -Body '{"version":1,"status":"activated"}'</code></pre>
+      This one prints nothing when it works.
+      <p><b>If a command shows red text:</b> "401" or "Unauthorized" means there is no key yet, or the screen was unpaired or deleted: start again from step 1. If you closed the window, run step 0 again and start from step 1 (the window forgets everything when closed).</p>
+    </div>
+
+    <div data-pane="mac">
+      <p><b>How to open it:</b> press <b>Cmd+Space</b>, type <code>Terminal</code>, press <b>Enter</b>. Paste a command with <b>Cmd+V</b>, then press <b>Enter</b>. Replace the words in CAPITALS with the values you get back.</p>
+      <b>1. Get a pairing code</b> (valid for 5 minutes)
+      <pre><code>curl -s -X POST https://api.addifytv.nu/api/v1/player/pairing-sessions -H 'content-type: application/json' -d '{"deviceId":"test-device-001","model":"Test player","playerVersion":"1.0.0"}'</code></pre>
+      It prints a <code>sessionId</code> and a 6-character <code>code</code>. Use the code in test C1. For a second screen, change <code>test-device-001</code> to <code>test-device-002</code>.
+      <br><br><b>2. After pairing in the portal, collect the screen's key</b>
+      <pre><code>curl -s https://api.addifytv.nu/api/v1/player/pairing-sessions/SESSION_ID</code></pre>
+      <code>"status":"PAIRED"</code> comes with a <code>credential</code>. Keep it; it is shown only once. <code>PENDING</code> means not paired yet; <code>EXPIRED</code> means run step 1 again.
+      <br><br><b>3. Tell the portal the screen is on</b> (repeat every minute to stay Online)
+      <pre><code>curl -s -X POST https://api.addifytv.nu/api/v1/player/heartbeat -H 'authorization: Bearer CREDENTIAL' -H 'content-type: application/json' -d '{"state":"PLAYING","resolution":"1920x1080","playerVersion":"1.0.0"}'</code></pre>
+      <b>4. See what the screen was told to play</b>
+      <pre><code>curl -s https://api.addifytv.nu/api/v1/player/manifest -H 'authorization: Bearer CREDENTIAL'</code></pre>
+      <b>5. Confirm the screen received it</b> (use the <code>version</code> number from step 4)
+      <pre><code>curl -s -X POST https://api.addifytv.nu/api/v1/player/sync-ack -H 'authorization: Bearer CREDENTIAL' -H 'content-type: application/json' -d '{"version":1,"status":"activated"}'</code></pre>
+    </div>
   </section>
 
   <div id="cases"></div>
@@ -151,7 +188,7 @@ const GROUPS = [
     { t: "Quick publish", url: "/portal", need: ["player"], steps: ["In Quick Publish pick a screen, then a playlist, then confirm."], exp: "It finishes with a published message. The screen now shows that playlist as its content." },
   ]},
   { title: "C. Screens and pairing", spec: "Spec 5.1 Pairing, 5.2 Screen record, 5.4 Monitoring, 4.2 Licence", cases: [
-    { t: "Pair a screen", url: "/portal/screens/pair", need: ["player"], steps: ["Get a pairing code from the player (or pretend-player step 1).", "Type the code and continue.", "Give the screen a name, a location, an orientation and a tag. Click Pair Screen."], exp: "\"… paired\" is shown. The screen appears in Screens. Overview shows one more licence used." },
+    { t: "Pair a screen", url: "/portal/screens/pair", need: ["player"], steps: ["Get a pairing code from the player (or Pretend player step 1).", "Type the code and continue.", "Give the screen a name, a location, an orientation and a tag. Click Pair Screen."], exp: "\"… paired\" is shown. The screen appears in Screens. Overview shows one more licence used." },
     { t: "A wrong code is refused", url: "/portal/screens/pair", steps: ["Type ABCDEF (or any code that is not real) and continue.", "Fill in a name and click Pair Screen."], exp: "You are taken back to the code step with a message that the code is not valid." },
     { t: "The code box only takes code characters", url: "/portal/screens/pair", steps: ["Type small letters, spaces, dashes and more than 6 characters."], exp: "The box turns letters into capitals, ignores spaces and dashes, and stops at 6 characters." },
     { t: "An old code is refused", url: "/portal/screens/pair", need: ["player"], steps: ["Get a code, wait 6 minutes, then try to pair with it."], exp: "A message says the code has expired and to restart pairing on the screen." },
@@ -397,6 +434,22 @@ document.getElementById("gateform").onsubmit = (ev) => {
 document.getElementById("signout").onclick = () => { localStorage.removeItem("qa-name"); localStorage.removeItem("qa-code"); location.reload(); };
 document.body.classList.add("locked");
 if (me && code) start(); else update();
+
+// Pretend-player instructions: show the tester's own operating system first; add copy buttons.
+(() => {
+  const isWin = /Win/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent);
+  const show = (os) => {
+    document.querySelectorAll("[data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== os));
+    document.querySelectorAll("[data-os]").forEach((b) => b.setAttribute("aria-selected", b.dataset.os === os));
+  };
+  document.querySelectorAll("[data-os]").forEach((b) => (b.onclick = () => show(b.dataset.os)));
+  show(isWin ? "win" : "mac");
+  document.querySelectorAll("#player pre").forEach((pre) => {
+    const btn = document.createElement("button"); btn.type = "button"; btn.className = "cp"; btn.textContent = "Copy";
+    btn.onclick = async () => { try { await navigator.clipboard.writeText(pre.querySelector("code").textContent); btn.textContent = "Copied"; } catch { btn.textContent = "Select and copy"; } setTimeout(() => (btn.textContent = "Copy"), 1500); };
+    pre.append(btn);
+  });
+})();
 </script>
 </body>
 </html>
