@@ -66,6 +66,27 @@
   #sync.bad { color:var(--bad); font-weight:600; }
   body.locked #cases, body.locked .bar { display:none; }
   body:not(.locked) #lockednote { display:none; }
+  .how { margin:6px 0 10px; padding-left:22px; }
+  .screens { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin:14px 0 6px; }
+  .ps { border:1px solid var(--line); border-radius:10px; padding:12px; min-width:0; }
+  .ps-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+  .ps-state { font-size:12px; font-weight:600; border-radius:999px; padding:2px 10px; background:var(--tint); color:var(--navy2); white-space:nowrap; }
+  .ps-state.on { background:var(--okbg); color:var(--ok); }
+  .ps-state.bad { background:var(--badbg); color:var(--bad); }
+  .ps-view { position:relative; aspect-ratio:16/9; background:#0b1220; color:#e8eef8; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; text-align:center; margin:0 auto; }
+  .ps-view.portrait { aspect-ratio:9/16; max-height:420px; }
+  .ps-view .msg { padding:14px; font-size:14px; line-height:1.45; }
+  .ps-view .code { display:block; font:700 34px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.12em; color:#fff; margin:6px 0; user-select:all; }
+  .ps-view .stage, .ps-view .zone { position:absolute; overflow:hidden; }
+  .ps-view .zone { outline:1px solid rgba(255,255,255,.25); }
+  .ps-view img, .ps-view video { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; }
+  .ps-view .cap { position:absolute; left:6px; bottom:6px; font-size:11px; background:rgba(0,0,0,.65); color:#fff; border-radius:4px; padding:1px 6px; }
+  .ps-info { font-size:13px; color:var(--muted); margin:8px 0; min-height:38px; }
+  .ps-btns { display:flex; flex-wrap:wrap; gap:8px; }
+  .ps-btns .main { background:var(--navy); border-color:var(--navy); color:#fff; font-weight:600; }
+  .adv { margin-top:16px; border-top:1px solid var(--line); padding-top:12px; }
+  .adv summary { cursor:pointer; color:var(--navy2); font-weight:600; }
+  a.need { text-decoration:none; }
   table { border-collapse:collapse; width:100%; font-size:14px; }
   td, th { text-align:left; padding:6px 8px; border-top:1px solid var(--line); vertical-align:top; }
   th { color:var(--muted); font-weight:500; font-size:13px; border-top:0; }
@@ -109,14 +130,25 @@
       <tr><td>A company admin login</td><td>The user you added to the company "Test" (role Admin). Sign in at <a href="https://addifytv.nu/login" target="_blank" rel="noopener">https://addifytv.nu/login</a>.</td></tr>
       <tr><td>The Super Admin login</td><td><code>admin@addifytv.com</code>. Only for tests marked <span class="need">Needs Super Admin</span>. Use a second browser or a private window so both can stay signed in.</td></tr>
       <tr><td>Test files</td><td>One JPG, one PNG, one short MP4 video, one PDF with 2 or more pages, and one file that is not allowed (for example a <code>.txt</code> or <code>.zip</code>).</td></tr>
-      <tr><td>A screen</td><td>A real Android player, or the "pretend player" commands below (Windows and Mac versions) (tests marked <span class="need">Needs a player</span>).</td></tr>
+      <tr><td>A screen</td><td>A real Android player, or the Pretend screen boxes below (tests marked <span class="need">Needs a screen</span>).</td></tr>
       <tr><td>A second email inbox</td><td>To receive an invitation and a password-reset email.</td></tr>
     </table>
   </section>
 
   <section class="card" id="player">
-    <h3>Pretend player (if you have no real screen)</h3>
-    <p class="lead">These commands do what the Android player does, so you can test pairing, online status and publishing without a real screen. Choose your computer:</p>
+    <h3>Pretend screen (if you have no real screen)</h3>
+    <p class="lead">These two boxes behave like real screens. Nothing to install and nothing to type: just use the buttons.</p>
+    <ol class="how">
+      <li>Click <b>Get a pairing code</b>. A 6-character code appears in the box.</li>
+      <li>In the portal, open Screens, then Pair Screen, and type that code (test C1).</li>
+      <li>The box pairs by itself and the portal shows the screen as Online. Whatever you publish to it plays in the box.</li>
+    </ol>
+    <p class="lead">Keep this page open in its own tab while you test: the screen is only Online while this page is open. Use the second box for tests that need two screens.</p>
+    <div class="screens" id="screens"></div>
+
+    <details class="adv">
+    <summary>Advanced: do the same with typed commands instead</summary>
+    <p class="lead">You do not need these if you use the boxes above. Choose your computer:</p>
     <div class="os" role="tablist" aria-label="Your computer">
       <button type="button" role="tab" data-os="win" aria-selected="false">Windows</button>
       <button type="button" role="tab" data-os="mac" aria-selected="false">Mac</button>
@@ -160,6 +192,7 @@ $api = "https://api.addifytv.nu/api/v1/player"</code></pre>
       <b>5. Confirm the screen received it</b> (use the <code>version</code> number from step 4)
       <pre><code>curl -s -X POST https://api.addifytv.nu/api/v1/player/sync-ack -H 'authorization: Bearer CREDENTIAL' -H 'content-type: application/json' -d '{"version":1,"status":"activated"}'</code></pre>
     </div>
+    </details>
   </section>
 
   <p class="card" id="lockednote">The test cases are hidden until you sign in. <a href="#gate">Go to the top</a>, enter your name and the access code, and press <b>Start</b>. All 125 tests then appear here.</p>
@@ -190,7 +223,7 @@ const GROUPS = [
     { t: "Quick publish", url: "/portal", need: ["player"], steps: ["In Quick Publish pick a screen, then a playlist, then confirm."], exp: "It finishes with a published message. The screen now shows that playlist as its content." },
   ]},
   { title: "C. Screens and pairing", spec: "Spec 5.1 Pairing, 5.2 Screen record, 5.4 Monitoring, 4.2 Licence", cases: [
-    { t: "Pair a screen", url: "/portal/screens/pair", need: ["player"], steps: ["Get a pairing code from the player (or Pretend player step 1).", "Type the code and continue.", "Give the screen a name, a location, an orientation and a tag. Click Pair Screen."], exp: "\"… paired\" is shown. The screen appears in Screens. Overview shows one more licence used." },
+    { t: "Pair a screen", url: "/portal/screens/pair", need: ["player"], steps: ["Get a pairing code from the player (or click Get a pairing code in a Pretend screen box).", "Type the code and continue.", "Give the screen a name, a location, an orientation and a tag. Click Pair Screen."], exp: "\"… paired\" is shown. The screen appears in Screens. Overview shows one more licence used." },
     { t: "A wrong code is refused", url: "/portal/screens/pair", steps: ["Type ABCDEF (or any code that is not real) and continue.", "Fill in a name and click Pair Screen."], exp: "You are taken back to the code step with a message that the code is not valid." },
     { t: "The code box only takes code characters", url: "/portal/screens/pair", steps: ["Type small letters, spaces, dashes and more than 6 characters."], exp: "The box turns letters into capitals, ignores spaces and dashes, and stops at 6 characters." },
     { t: "An old code is refused", url: "/portal/screens/pair", need: ["player"], steps: ["Get a code, wait 6 minutes, then try to pair with it."], exp: "A message says the code has expired and to restart pairing on the screen." },
@@ -199,10 +232,10 @@ const GROUPS = [
     { t: "Screen list and filters", url: "/portal/screens", need: ["player"], steps: ["Open Screens.", "Use the search box and the All / Online / Offline / Error buttons and the group filter."], exp: "Each screen shows its name, location, status, content and last seen. The list changes to match the search and filter." },
     { t: "Screen details", url: "/portal/screens", need: ["player"], steps: ["Click a screen to open it."], exp: "You see name, Online/Offline, location, current content, group, orientation, last seen, and device details (model, app version). The IP address is partly hidden." },
     { t: "Edit a screen", url: "/portal/screens", need: ["player"], steps: ["Open a screen, click Edit Screen.", "Change the name, location, orientation and tags. Save.", "Then try to save with an empty name."], exp: "Changes are saved and shown. An empty name is refused." },
-    { t: "Online and Offline status", url: "/portal/screens", need: ["player"], steps: ["Keep the Screens page open.", "Turn the player on (or run pretend-player step 3).", "Then turn it off and wait about 2 minutes."], exp: "The screen turns Online by itself, without reloading the page. After the player stops, it turns Offline and \"last seen\" shows when." },
+    { t: "Online and Offline status", url: "/portal/screens", need: ["player"], steps: ["Keep the Screens page open.", "Turn the player on (a Pretend screen is on as soon as it is paired).", "Then turn it off (Turn screen off in the Pretend screen box) and wait about 2 minutes."], exp: "The screen turns Online by itself, without reloading the page. After the player stops, it turns Offline and \"last seen\" shows when." },
     { t: "Refresh a screen from the portal", url: "/portal/screens", need: ["player"], steps: ["Open a screen and click Refresh."], exp: "You get a confirmation. The action appears in Recent Activity." },
     { t: "Licence limit stops extra screens", url: "/portal/screens/pair", need: ["sa", "player"], steps: ["As Super Admin, set this company's Maximum Screens to the number already paired.", "As the company user, try to pair one more screen."], exp: "Pairing is refused with a clear message that the licence limit is reached. No screen is added." },
-    { t: "Unpair a screen", url: "/portal/screens", need: ["player"], steps: ["Open a screen, click Unpair and confirm.", "Check Overview.", "Run pretend-player step 3 with the old key."], exp: "You are taken back to the list and the screen is gone. One licence is free again. The old key is refused." },
+    { t: "Unpair a screen", url: "/portal/screens", need: ["player"], steps: ["Open a screen, click Unpair and confirm.", "Check Overview.", "Look at the player (or the Pretend screen box) within a minute."], exp: "You are taken back to the list and the screen is gone. One licence is free again. The player is refused: the Pretend screen box says its key was refused." },
   ]},
   { title: "D. Screen groups", spec: "Spec 5.3 Screen groups", cases: [
     { t: "Create a group", url: "/portal/screens/groups/new", need: ["player"], steps: ["Type a name and a description, tick one or more screens, save."], exp: "The group is created and shows its screens and how many are online." },
@@ -243,10 +276,10 @@ const GROUPS = [
     { t: "Publish to one screen", url: "/portal/playlists", need: ["player"], steps: ["Open a playlist, click Publish.", "Choose Publish Now, pick one screen, Review, confirm."], exp: "\"Published!\" is shown. If the screen is off it says Pending (it will sync when it reconnects). If it is on it says Syncing." },
     { t: "Publish to several screens", url: "/portal/playlists", need: ["player"], steps: ["Publish a playlist and tick two or more screens."], exp: "All chosen screens are listed in the summary and each gets the playlist." },
     { t: "Publish to a group", url: "/portal/playlists", need: ["player"], steps: ["Publish a playlist and choose a screen group."], exp: "Every screen in the group gets the playlist." },
-    { t: "The screen receives it", url: "/portal/screens", need: ["player"], steps: ["After publishing, look at the real screen (or run pretend-player step 4, then step 5).", "Open the screen in the portal."], exp: "The screen plays the playlist (step 4 lists its items and download links). After step 5 the portal shows the content as Synced." },
+    { t: "The screen receives it", url: "/portal/screens", need: ["player"], steps: ["After publishing, look at the real screen (or the Pretend screen box; click Check for new content to skip the wait).", "Open the screen in the portal."], exp: "The screen plays the playlist, item by item, for the seconds you set. The portal shows the content as Synced." },
     { t: "Publish from a screen's page", url: "/portal/screens", need: ["player"], steps: ["Open a screen, click Publish Content, choose a playlist, confirm."], exp: "The screen's Current Assignment changes to that playlist." },
     { t: "A newer publish replaces the old one", url: "/portal/playlists", need: ["player"], steps: ["Publish playlist A to a screen, then playlist B to the same screen."], exp: "The screen shows playlist B. The version number goes up." },
-    { t: "Editing a published playlist", url: "/portal/playlists", need: ["player"], steps: ["Add an item to a playlist that is on a screen. Save."], exp: "The screen gets the change (step 4 shows the new item) without publishing again." },
+    { t: "Editing a published playlist", url: "/portal/playlists", need: ["player"], steps: ["Add an item to a playlist that is on a screen. Save."], exp: "The screen gets the change (the Pretend screen box shows the new item) without publishing again." },
   ]},
   { title: "H. Scheduling", spec: "Spec 6.3 Scheduling", cases: [
     { t: "Schedule a playlist", url: "/portal/playlists", need: ["player"], steps: ["Open a playlist, click Publish, choose Schedule.", "Pick a screen, a start date and time later today, and an end time. Confirm."], exp: "It is saved as Scheduled. The time zone is shown and the times are in that zone." },
@@ -262,7 +295,7 @@ const GROUPS = [
     { t: "Use a layout", url: "/portal/layouts", steps: ["Choose a layout and give it a name.", "For each zone pick a playlist or a media file. Save."], exp: "The preview shows each zone with its content. The layout is saved under your company." },
     { t: "Layout name rules", url: "/portal/layouts", steps: ["Try to save a layout with no name, and with a name you already used."], exp: "Both are refused with a message." },
     { t: "You cannot draw your own zones", url: "/portal/layouts", steps: ["Look for a way to move or resize zones."], exp: "There is none: only the ready-made layouts can be used." },
-    { t: "Publish a layout", url: "/portal/layouts", need: ["player"], steps: ["Publish the layout to a screen."], exp: "The screen's content becomes that layout (pretend-player step 4 lists the zones)." },
+    { t: "Publish a layout", url: "/portal/layouts", need: ["player"], steps: ["Publish the layout to a screen."], exp: "The screen's content becomes that layout (the Pretend screen box shows each zone in its place)." },
   ]},
   { title: "J. Templates", spec: "Spec 10 Promotional templates", cases: [
     { t: "Open a template", url: "/portal/layouts", need: ["sa"], steps: ["(Super Admin must have created at least one template.)", "Open Layouts / Templates and click a template."], exp: "A form shows only the fields you may change (for example title, price, picture) next to a preview." },
@@ -335,7 +368,7 @@ const API = "/qa/api/results";
 const state = {};                       // id -> { r, n, by, at }
 let me = localStorage.getItem("qa-name") || "";
 let code = localStorage.getItem("qa-code") || "";
-const NEED = { sa: "Needs Super Admin", player: "Needs a player", mail: "Needs a second inbox" };
+const NEED = { sa: "Needs Super Admin", player: "Needs a screen", mail: "Needs a second inbox" };
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const sync = document.getElementById("sync");
@@ -360,7 +393,7 @@ GROUPS.forEach((g) => {
     const id = `${letter}${i + 1}`;
     state[id] = { r: "", n: "", by: "", at: "" };
     const row = el("div", "tc"); row.dataset.id = id;
-    const needs = (c.need || []).map((n) => `<span class="need">${NEED[n]}</span>`).join("");
+    const needs = (c.need || []).map((n) => n === "player" ? `<a class="need" href="#player" title="Go to the pretend screen">${NEED[n]}</a>` : `<span class="need">${NEED[n]}</span>`).join("");
     const left = el("div", "", `
       <h4><span class="id">${id}</span>${esc(c.t)}</h4>
       <div class="meta">${needs}Open: <a href="${U + c.url}" target="_blank" rel="noopener">${U + c.url}</a></div>
@@ -451,6 +484,154 @@ if (me && code) start(); else update();
     btn.onclick = async () => { try { await navigator.clipboard.writeText(pre.querySelector("code").textContent); btn.textContent = "Copied"; } catch { btn.textContent = "Select and copy"; } setTimeout(() => (btn.textContent = "Copy"), 1500); };
     pre.append(btn);
   });
+})();
+
+// Pretend screens: each box does what the Android player does (pair, stay online, fetch content,
+// confirm it) against the real player API, so testers need no terminal.
+(() => {
+  const PLAYER = "https://api.addifytv.nu/api/v1/player";
+  const BEAT_MS = 20000, POLL_MS = 3000, REFRESH_MS = 45 * 60000; // file links last 1 hour
+  const papi = async (method, path, key, body) => {
+    const res = await fetch(PLAYER + path, { method, headers: { ...(key ? { authorization: `Bearer ${key}` } : {}), ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+    if (res.status === 401) throw Object.assign(new Error("refused"), { refused: true });
+    if (!res.ok) throw new Error(res.status === 429 ? "Too many tries. Wait a minute and try again." : `The server answered ${res.status}.`);
+    return res.status === 204 || res.status === 202 ? null : (await res.json()).data;
+  };
+  // A worker's timer keeps running when this tab is in the background, so the screen stays Online.
+  const ticks = [];
+  try { new Worker(URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${BEAT_MS})`]))).onmessage = () => ticks.forEach((f) => f()); }
+  catch { setInterval(() => ticks.forEach((f) => f()), BEAT_MS); }
+
+  function screen(slot) {
+    const KEY = `qa-screen-${slot}`;
+    let st = {}; try { st = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { /* start fresh */ }
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch { /* still works for this visit */ } };
+    let manifest = null, loadedAt = 0, playing = "", gen = 0, pollTimer = 0, note = "", busy = false, shown = "";
+
+    const box = el("div", "ps", `<div class="ps-head"><b>Pretend screen ${slot}</b><span class="ps-state"></span></div><div class="ps-view"></div><p class="ps-info" role="status"></p><div class="ps-btns"></div>`);
+    const [stateEl, view, info, btns] = [".ps-state", ".ps-view", ".ps-info", ".ps-btns"].map((q) => box.querySelector(q));
+    const button = (label, fn, main) => { const b = el("button", main ? "main" : "", esc(label)); b.type = "button"; b.onclick = fn; return b; };
+    const message = (html) => { if (shown === html) return; gen++; playing = ""; shown = html; view.classList.remove("portrait"); view.innerHTML = `<div class="msg">${html}</div>`; };
+
+    // Shows items one after another for their seconds, like the player does.
+    function loop(host, items, assets, mine) {
+      let i = 0;
+      const show = () => {
+        if (mine !== gen) return;
+        const it = items[i % items.length], a = assets.get(it.assetId);
+        host.querySelectorAll("img,video,.cap").forEach((n) => n.remove());
+        if (a) {
+          const m = document.createElement(a.type === "VIDEO" ? "video" : "img");
+          if (a.type === "VIDEO") Object.assign(m, { muted: true, autoplay: true, loop: true, playsInline: true });
+          m.src = a.url; m.alt = ""; host.append(m);
+        }
+        host.append(el("span", "cap", `${(i % items.length) + 1} of ${items.length} · ${a ? (a.page ? `PDF page ${a.page}` : a.type.toLowerCase()) : "missing file"} · ${it.durationSec}s`));
+        i++; setTimeout(show, Math.max(1, it.durationSec) * 1000);
+      };
+      show();
+    }
+
+    function play() {
+      const m = manifest; if (!m) return;
+      const now = Date.now();
+      const live = m.schedule.filter((x) => Date.parse(x.startsAt) <= now && (!x.endsAt || Date.parse(x.endsAt) > now)).sort((a, b) => (a.targetKind === "SCREEN" ? 0 : 1) - (b.targetKind === "SCREEN" ? 0 : 1))[0];
+      const kind = { PLAYLIST: "Playlist", LAYOUT: "Layout", TEMPLATE_INSTANCE: "Template", CANVAS: "Canvas" };
+      const what = live ? `Schedule "${live.name}"` : m.assignment ? `${kind[m.assignment.kind] || m.assignment.kind} "${m.assignment.name}"` : "";
+      const zones = !live && m.layout ? m.layout.zones : null;
+      const items = live ? live.items : m.items;
+      const key = JSON.stringify([m.version, live?.id, m.generatedAt]);
+      const list = (xs) => xs.length ? xs.map((x) => `${assetsOf(m).get(x.assetId)?.type.toLowerCase() ?? "file"} ${x.durationSec}s`).join(", ") : "nothing yet";
+      note = !what ? "Nothing is published to this screen yet." :
+        zones ? `${what}. ${zones.map((z) => `${z.name}: ${list(z.items)}`).join("; ")}.` :
+        `${what}. ${items.length} item${items.length === 1 ? "" : "s"}: ${list(items)}.`;
+      if (m.canvas) note += ` This screen is part ${m.canvas.position} of ${m.canvas.total} of the canvas.`;
+      if (key === playing) return;
+      const mine = ++gen; playing = key; shown = "";
+      view.classList.toggle("portrait", m.orientation === "PORTRAIT");
+      view.innerHTML = "";
+      if (!what || (!zones && !items.length) || (zones && zones.every((z) => !z.items.length))) { view.innerHTML = `<div class="msg">${what ? "This content has no items to play." : "Paired and online.<br>Nothing is published to this screen yet."}</div>`; return; }
+      const assets = assetsOf(m);
+      const stage = el("div", "stage"); const v = m.canvas?.viewport;
+      Object.assign(stage.style, v ? { width: `${100 / v.width}%`, height: `${100 / v.height}%`, left: `${-v.x / v.width * 100}%`, top: `${-v.y / v.height * 100}%` } : { inset: "0" });
+      view.append(stage);
+      if (zones) zones.forEach((z) => { const d = el("div", "zone"); Object.assign(d.style, { left: `${z.x * 100}%`, top: `${z.y * 100}%`, width: `${z.w * 100}%`, height: `${z.h * 100}%` }); stage.append(d); if (z.items.length) loop(d, z.items, assets, mine); });
+      else loop(stage, items, assets, mine);
+    }
+    const assetsOf = (m) => new Map(m.assets.map((a) => [a.id, a]));
+
+    async function fetchContent() {
+      manifest = await papi("GET", "/manifest", st.key); loadedAt = Date.now();
+      play();
+      await papi("POST", "/sync-ack", st.key, { version: manifest.version, status: "activated" });
+    }
+    async function beat(force) {
+      if (!st.key || !st.on || st.refused || busy) return;
+      busy = true;
+      try {
+        const hb = await papi("POST", "/heartbeat", st.key, { state: "PLAYING", resolution: "1920x1080", playerVersion: "qa-pretend", currentVersion: manifest?.version });
+        if (force || !manifest || hb.manifestVersion !== manifest.version || Date.now() - loadedAt > REFRESH_MS) await fetchContent(); else play();
+        st.error = "";
+      } catch (e) {
+        if (e.refused) { st.refused = true; save(); } else st.error = e.message === "Failed to fetch" ? "Could not reach the server. It will try again." : e.message;
+      }
+      busy = false; paint();
+    }
+
+    async function poll() {
+      clearTimeout(pollTimer);
+      if (!st.sessionId || st.key) return;
+      try {
+        const r = await papi("GET", `/pairing-sessions/${st.sessionId}`);
+        if (r.status === "PAIRED" && r.credential) { st = { deviceId: st.deviceId, key: r.credential, on: true }; save(); paint(); return beat(true); }
+        if (r.status !== "PENDING") { st = { deviceId: st.deviceId, error: r.status === "EXPIRED" ? "That code ran out before it was used. Get a new one." : "That code can no longer be used. Get a new one." }; save(); return paint(); }
+      } catch (e) { /* network hiccup: keep trying */ }
+      paint(); pollTimer = setTimeout(poll, POLL_MS);
+    }
+    async function getCode() {
+      st.deviceId ||= `qa-${slot}-${Math.random().toString(36).slice(2, 10)}`;
+      try {
+        const s = await papi("POST", "/pairing-sessions", null, { deviceId: st.deviceId, model: `QA pretend screen ${slot}${me ? ` (${me.slice(0, 40)})` : ""}`, playerVersion: "qa-pretend" });
+        st = { deviceId: st.deviceId, sessionId: s.sessionId, code: s.code, expiresAt: s.expiresAt };
+      } catch (e) { st.error = e.message === "Failed to fetch" ? "Could not reach the server. Check your connection and try again." : e.message; }
+      save(); paint(); poll();
+    }
+    const forget = () => { clearTimeout(pollTimer); manifest = null; st = { deviceId: st.deviceId }; save(); paint(); };
+
+    function paint() {
+      btns.innerHTML = ""; stateEl.className = "ps-state";
+      if (st.refused) {
+        stateEl.textContent = "Key refused"; stateEl.classList.add("bad");
+        message("The portal refused this screen's key.");
+        info.textContent = "This happens when the screen was unpaired or deleted in the portal. Start again to pair it as a new screen.";
+        btns.append(button("Start again", forget, true));
+      } else if (st.key && st.on) {
+        stateEl.textContent = "On"; stateEl.classList.add("on");
+        if (!manifest) message("Paired. Loading content…");
+        info.textContent = st.error || (manifest ? `${note} Version ${manifest.version}, confirmed to the portal.` : "");
+        btns.append(button("Check for new content", () => beat(true), true), button("Turn screen off", () => { st.on = false; save(); paint(); }), button("Forget this screen", forget));
+      } else if (st.key) {
+        stateEl.textContent = "Off";
+        message("The screen is switched off.");
+        info.textContent = "The portal shows it Offline about 2 minutes after you switch it off.";
+        btns.append(button("Turn screen on", () => { st.on = true; save(); paint(); beat(true); }, true), button("Forget this screen", forget));
+      } else if (st.sessionId) {
+        const left = Math.max(0, Math.round((Date.parse(st.expiresAt) - Date.now()) / 1000));
+        stateEl.textContent = "Waiting to be paired";
+        message(`Type this code in the portal<span class="code">${esc(st.code)}</span>Screens, then Pair Screen`);
+        info.textContent = `The code works for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} more. This box pairs by itself once you finish in the portal.`;
+        btns.append(button("Get a different code", getCode), button("Cancel", forget));
+      } else {
+        stateEl.textContent = "Not paired";
+        message("No screen here yet.");
+        info.textContent = st.error || "Click the button to get a pairing code.";
+        btns.append(button("Get a pairing code", getCode, true));
+      }
+    }
+    ticks.push(() => beat(false));
+    paint(); poll(); beat(true);
+    return box;
+  }
+  document.getElementById("screens").append(screen(1), screen(2));
 })();
 </script>
 </body>
