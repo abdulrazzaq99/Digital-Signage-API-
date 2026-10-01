@@ -144,8 +144,9 @@
       <li>In the portal, open Screens, then Pair Screen, and type that code (this is test C1, just below).</li>
       <li>The box pairs by itself and the portal shows the screen as Online. Whatever you publish to it plays in the box.</li>
     </ol>
-    <p class="lead">Keep this page open in its own tab while you test: the screen is only Online while this page is open. Use the second box for tests that need two screens.</p>
+    <p class="lead">Keep this page open in its own tab while you test: the screen is only Online while this page is open. Use the second box for tests that need two screens. Need more, for example a third screen for the licence-limit test (C12)? Click <b>Add another screen</b> under the boxes.</p>
     <div class="screens" id="screens"></div>
+    <button type="button" id="addscreen">+ Add another screen</button>
 
     <details class="adv">
     <summary>Advanced: do the same with typed commands instead</summary>
@@ -235,7 +236,7 @@ const GROUPS = [
     { t: "Edit a screen", url: "/portal/screens", need: ["player"], steps: ["Open a screen, click Edit Screen.", "Change the name, location, orientation and tags. Save.", "Then try to save with an empty name."], exp: "Changes are saved and shown. An empty name is refused." },
     { t: "Online and Offline status", url: "/portal/screens", need: ["player"], steps: ["Keep the Screens page open.", "Turn the player on (a Pretend screen is on as soon as it is paired).", "Then turn it off (Turn screen off in the Pretend screen box) and wait about 2 minutes."], exp: "The screen turns Online by itself, without reloading the page. After the player stops, it turns Offline and \"last seen\" shows when." },
     { t: "Refresh a screen from the portal", url: "/portal/screens", need: ["player"], steps: ["Open a screen and click Refresh."], exp: "You get a confirmation. The action appears in Recent Activity." },
-    { t: "Licence limit stops extra screens", url: "/portal/screens/pair", need: ["sa", "player"], steps: ["As Super Admin, set this company's Maximum Screens to the number already paired.", "As the company user, try to pair one more screen."], exp: "Pairing is refused with a clear message that the licence limit is reached. No screen is added." },
+    { t: "Licence limit stops extra screens", url: "/portal/screens/pair", need: ["sa", "player"], steps: ["As Super Admin, set this company's Maximum Screens to the number already paired.", "As the company user, try to pair one more screen (with Pretend screens: click Add another screen, then Get a pairing code in the new box, and type that code)."], exp: "Pairing is refused with a clear message that the licence limit is reached. No screen is added." },
     { t: "Unpair a screen", url: "/portal/screens", need: ["player"], steps: ["Open a screen, click Unpair and confirm.", "Check Overview.", "Look at the player (or the Pretend screen box) within a minute."], exp: "You are taken back to the list and the screen is gone. One licence is free again. The player is refused: the Pretend screen box says its key was refused." },
   ]},
   { title: "D. Screen groups", spec: "Spec 5.3 Screen groups", cases: [
@@ -630,13 +631,24 @@ if (me && code) start(); else update();
         message("No screen here yet.");
         info.textContent = st.error || "Click the button to get a pairing code.";
         btns.append(button("Get a pairing code", getCode, true));
+        if (slot > 2) btns.append(button("Remove this box", () => { try { localStorage.removeItem(KEY); } catch { /* ignore */ } removeBox(slot, box); }));
       }
     }
     ticks.push(() => beat(false));
     paint(); poll(); beat(true);
     return box;
   }
-  document.getElementById("screens").append(screen(1), screen(2));
+  // Two boxes to start; more on request (up to 6), remembered along with any box holding a screen.
+  const MAX = 6, grid = document.getElementById("screens"), add = document.getElementById("addscreen");
+  const slots = new Set([1, 2]);
+  for (let n = 3; n <= MAX; n++) { try { if (localStorage.getItem(`qa-screen-${n}`)) slots.add(n); } catch { /* ignore */ } }
+  const remember = () => { try { localStorage.setItem("qa-screen-slots", JSON.stringify([...slots])); } catch { /* ignore */ } };
+  try { JSON.parse(localStorage.getItem("qa-screen-slots") || "[]").forEach((n) => n >= 1 && n <= MAX && slots.add(n)); } catch { /* ignore */ }
+  const refreshAdd = () => { add.disabled = slots.size >= MAX; add.textContent = slots.size >= MAX ? `${MAX} screens is the most here` : "+ Add another screen"; };
+  function removeBox(slot, box) { slots.delete(slot); remember(); box.remove(); refreshAdd(); }
+  [...slots].sort((a, b) => a - b).forEach((n) => grid.append(screen(n)));
+  add.onclick = () => { let n = 1; while (slots.has(n)) n++; if (n > MAX) return; slots.add(n); remember(); const box = screen(n); grid.append(box); box.scrollIntoView({ block: "nearest" }); refreshAdd(); };
+  refreshAdd();
 })();
 </script>
 </body>
