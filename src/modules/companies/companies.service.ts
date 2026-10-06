@@ -15,7 +15,7 @@ type CompanyRow = NonNullable<Awaited<ReturnType<typeof repo.findById>>>;
 
 function toDto(c: CompanyRow, counts?: { screens: number; online: number; offline: number }) {
   return {
-    id: c.id, code: c.code, name: c.name, status: c.status, website: c.website, industry: c.industry, phone: c.phone, timezone: c.timezone, plan: c.plan, overLimit: c.overLimit, createdAt: c.createdAt.toISOString(),
+    id: c.id, code: c.code, name: c.name, status: c.status, website: c.website, industry: c.industry, phone: c.phone, timezone: c.timezone, plan: c.plan, mediaApproval: c.mediaApproval, overLimit: c.overLimit, createdAt: c.createdAt.toISOString(),
     license: c.license ? { screenLimit: c.license.screenLimit, state: c.license.state, overLimit: c.license.overLimit } : null,
     ...(counts ? { counts: { ...counts, available: Math.max(0, (c.license?.screenLimit ?? 0) - counts.screens) } } : {}),
   };
@@ -57,6 +57,7 @@ export const companiesService = {
   async update(actor: AuthUser, scope: TenantScope, id: string, body: z.infer<typeof updateCompanyBody>) {
     assertCanRead(scope, id);
     if (scope.kind === "company" && body.status !== undefined) throw new ForbiddenError("Only the Super Admin can change company status", "PLATFORM_ONLY");
+    if (scope.kind === "company" && body.mediaApproval !== undefined) throw new ForbiddenError("Only the Super Admin can change whether uploads need approval", "PLATFORM_ONLY");
     const existing = await repo.findById(id);
     if (!existing) throw new NotFoundError("Company");
     await assertNameFree("company", body.name, { excludeId: id });

@@ -79,6 +79,13 @@ enum MediaStatus {
   FAILED
 }
 
+/// Whether the Super Admin has cleared an upload to be shown on screens.
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum DerivativeKind {
   THUMBNAIL
   PDF_PAGE
@@ -148,18 +155,20 @@ enum ActivityStatus {
 // ---------- Tenancy & identity ----------
 
 model Company {
-  id        String        @id @default(cuid())
-  code      String        @unique
-  name      String
-  status    CompanyStatus @default(ACTIVE)
-  website   String?
-  industry  String?
-  phone     String?
-  timezone  String        @default("UTC")
-  plan      String?
-  overLimit Boolean       @default(false)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id            String        @id @default(cuid())
+  code          String        @unique
+  name          String
+  status        CompanyStatus @default(ACTIVE)
+  website       String?
+  industry      String?
+  phone         String?
+  timezone      String        @default("UTC")
+  plan          String?
+  overLimit     Boolean       @default(false)
+  /// Uploads wait for the Super Admin's approval before screens show them.
+  mediaApproval Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   users             User[]
   license           License?
@@ -197,14 +206,15 @@ model User {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  refreshTokens      RefreshToken[]
-  passwordResets     PasswordReset[]
-  offerViews         OfferView[]
-  scratchAttempts    ScratchAttempt[]
-  scratchWinners     ScratchWinner[]
-  pushSubscriptions  PushSubscription[]
-  activityLogs       ActivityLog[]
-  uploadedMedia      MediaAsset[]       @relation("UploadedBy")
+  refreshTokens        RefreshToken[]
+  passwordResets       PasswordReset[]
+  offerViews           OfferView[]
+  scratchAttempts      ScratchAttempt[]
+  scratchWinners       ScratchWinner[]
+  pushSubscriptions    PushSubscription[]
+  activityLogs         ActivityLog[]
+  uploadedMedia        MediaAsset[]       @relation("UploadedBy")
+  reviewedMedia        MediaAsset[]       @relation("ReviewedBy")
   publishedAssignments ScreenAssignment[] @relation("PublishedBy")
 
   @@index([companyId])
@@ -257,19 +267,19 @@ model License {
 // ---------- Screens ----------
 
 model PairingSession {
-  id         String               @id @default(cuid())
-  code       String               @unique
-  deviceId   String
-  model      String?
+  id            String               @id @default(cuid())
+  code          String               @unique
+  deviceId      String
+  model         String?
   playerVersion String?
-  appVersion String?
-  status     PairingSessionStatus @default(PENDING)
-  expiresAt  DateTime
-  consumedAt DateTime?
-  screenId   String?
-  companyId  String?
-  company    Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  createdAt  DateTime             @default(now())
+  appVersion    String?
+  status        PairingSessionStatus @default(PENDING)
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  screenId      String?
+  companyId     String?
+  company       Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdAt     DateTime             @default(now())
 
   @@index([deviceId])
   @@index([status, expiresAt])
@@ -361,26 +371,32 @@ model PlayerHeartbeat {
 // ---------- Media ----------
 
 model MediaAsset {
-  id           String      @id @default(cuid())
-  companyId    String
-  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name         String
-  type         MediaType
-  status       MediaStatus @default(UPLOADING)
-  mimeType     String
-  sizeBytes    BigInt      @default(0)
-  checksum     String?
-  storageKey   String      @unique
-  width        Int?
-  height       Int?
-  durationSec  Int?
-  pages        Int?
-  tags         String[]    @default([])
-  failureReason String?
-  uploadedById String?
-  uploadedBy   User?       @relation("UploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id              String         @id @default(cuid())
+  companyId       String
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  type            MediaType
+  status          MediaStatus    @default(UPLOADING)
+  mimeType        String
+  sizeBytes       BigInt         @default(0)
+  checksum        String?
+  storageKey      String         @unique
+  width           Int?
+  height          Int?
+  durationSec     Int?
+  pages           Int?
+  tags            String[]       @default([])
+  failureReason   String?
+  /// Uploads from companies that need approval start PENDING; screens only play APPROVED files.
+  approval        ApprovalStatus @default(APPROVED)
+  rejectionReason String?
+  reviewedAt      DateTime?
+  reviewedById    String?
+  reviewedBy      User?          @relation("ReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  uploadedById    String?
+  uploadedBy      User?          @relation("UploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   derivatives   MediaDerivative[]
   playlistItems PlaylistItem[]
@@ -390,6 +406,7 @@ model MediaAsset {
   @@index([companyId, status])
   @@index([companyId, type])
   @@index([companyId, createdAt])
+  @@index([approval, createdAt])
 }
 
 model MediaDerivative {
@@ -421,8 +438,8 @@ model Playlist {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
-  items     PlaylistItem[]
-  schedules Schedule[]
+  items        PlaylistItem[]
+  schedules    Schedule[]
   zoneBindings LayoutZone[]
 
   @@index([companyId])
@@ -532,14 +549,14 @@ model Template {
 }
 
 model TemplateInstance {
-  id         String   @id @default(cuid())
-  companyId  String
-  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  templateId String
-  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  name       String
-  values     Json
-  outputKey  String?
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  templateId      String
+  template        Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name            String
+  values          Json
+  outputKey       String?
   /// Details of the rendered file, sent to players with it.
   outputMimeType  String?
   outputChecksum  String?
@@ -547,11 +564,11 @@ model TemplateInstance {
   outputWidth     Int?
   outputHeight    Int?
   /// A render is queued or running; the previous output (if any) stays live until it lands.
-  renderPending   Boolean @default(false)
+  renderPending   Boolean  @default(false)
   /// Increases on every values change, so a render of older values never clears renderPending.
-  valuesVersion   Int     @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  valuesVersion   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([companyId])
 }
@@ -559,22 +576,22 @@ model TemplateInstance {
 // ---------- Marketplace ----------
 
 model Offer {
-  id          String      @id @default(cuid())
-  title       String
-  category    String
-  status      OfferStatus @default(DRAFT)
-  summary     String
-  description String
-  contact     Json
+  id           String      @id @default(cuid())
+  title        String
+  category     String
+  status       OfferStatus @default(DRAFT)
+  summary      String
+  description  String
+  contact      Json
   instructions String
-  included    String[]    @default([])
-  steps       String[]    @default([])
-  imageKey    String?
-  startsAt    DateTime?
-  endsAt      DateTime?
-  publishedAt DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  included     String[]    @default([])
+  steps        String[]    @default([])
+  imageKey     String?
+  startsAt     DateTime?
+  endsAt       DateTime?
+  publishedAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   views OfferView[]
 
@@ -606,18 +623,18 @@ enum NotificationType {
 }
 
 model Notification {
-  id         String    @id @default(cuid())
-  title      String
-  body       String
-  type       NotificationType @default(announcement)
+  id          String           @id @default(cuid())
+  title       String
+  body        String
+  type        NotificationType @default(announcement)
   /// Offer or campaign ID for `offer` / `campaign`; null for announcements.
-  targetId   String?
-  audience   Json
-  deepLink   String?
+  targetId    String?
+  audience    Json
+  deepLink    String?
   scheduledAt DateTime?
-  sentAt     DateTime?
-  providerId String?
-  createdAt  DateTime  @default(now())
+  sentAt      DateTime?
+  providerId  String?
+  createdAt   DateTime         @default(now())
 
   @@index([createdAt])
 }
@@ -713,16 +730,16 @@ model ScratchWinner {
 // ---------- Synchronized canvas ----------
 
 model CanvasSet {
-  id          String       @id @default(cuid())
+  id          String          @id @default(cuid())
   companyId   String
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name        String
-  status      CanvasStatus @default(DRAFT)
+  status      CanvasStatus    @default(DRAFT)
   contentKind AssignmentKind?
   contentRef  String?
   activateAt  DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   members CanvasMember[]
 

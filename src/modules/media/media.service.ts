@@ -7,6 +7,9 @@ import { logActivity } from "../../core/audit/activity.js";
 import { requireCompanyId, tenantWhere, type AuthUser, type TenantScope } from "../../core/auth/scope.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
+import { queueMail } from "../../core/mail/index.js";
+import { mediaReviewEmail } from "../../core/mail/templates.js";
+import { logger } from "../../core/middleware/logger.js";
 import { enqueue, JobNames } from "../../core/queue/queues.js";
 import { deleteObject, headObject, presignGet, presignPut } from "../../core/storage/s3.js";
 import type { Prisma } from "../../generated/prisma/client.js";
@@ -23,6 +26,7 @@ export async function toMediaDto(m: MediaRow) {
   const thumb = m.derivatives[0]?.storageKey;
   return {
     id: m.id, name: m.name, type: m.type, status: m.status, mimeType: m.mimeType, sizeBytes: Number(m.sizeBytes), checksum: m.checksum, width: m.width, height: m.height, durationSec: m.durationSec, pages: m.pages, tags: m.tags, failureReason: m.failureReason, uploadedBy: m.uploadedBy?.name ?? null, createdAt: m.createdAt.toISOString(),
+    approval: m.approval, rejectionReason: m.rejectionReason, reviewedAt: m.reviewedAt?.toISOString() ?? null, reviewedBy: m.reviewedBy?.name ?? null, company: m.company,
     usedIn: dedupe(m.playlistItems.map((i) => ({ id: i.playlist.id, name: i.playlist.name, kind: "PLAYLIST" as const }))),
     thumbnailUrl: thumb ? await presignGet(thumb) : m.type === "IMAGE" && m.status === "READY" ? await presignGet(m.storageKey) : null,
   };
@@ -47,9 +51,28 @@ function sanitizeFileName(name: string): string {
   return name.replace(/[^\w.\-() ]+/g, "_").slice(0, 200);
 }
 
+/** Portal notification to the uploader (or the whole company if they are gone), plus an email. */
+async function notifyReview(m: MediaRow, decision: { approval: "APPROVED" } | { approval: "REJECTED"; reason: string }) {
+  const approved = decision.approval === "APPROVED";
+  const uploader = m.uploadedById ? await prisma.user.findFirst({ where: { id: m.uploadedById, isActive: true }, select: { id: true, email: true, name: true } }) : null;
+  const n = await prisma.notification.create({
+    data: {
+      title: (approved ? `Approved: ${m.name}` : `Not approved: ${m.name}`).slice(0, 120),
+      body: approved ? "It now plays on every screen it is published to." : `It won't be shown on your screens. Reason: ${decision.reason}`,
+      type: "announcement",
+      audience: uploader ? { kind: "users", userIds: [uploader.id] } : { kind: "companies", companyIds: [m.companyId] },
+      deepLink: "/portal/media",
+    },
+  });
+  await enqueue(JobNames.notificationSend, { notificationId: n.id });
+  if (uploader) await queueMail(mediaReviewEmail(uploader, m.name, decision));
+}
+
 export const mediaService = {
   async list(scope: TenantScope, q: z.infer<typeof listMediaQuery>) {
-    const where: Prisma.MediaAssetWhereInput = { ...tenantWhere(scope), ...(q.type ? { type: q.type } : {}), ...(q.status ? { status: q.status } : {}), ...(q.search ? { name: { contains: q.search, mode: "insensitive" } } : {}) };
+    // Waiting for approval means uploaded and waiting: unfinished or failed uploads are not reviewable.
+    const approval: Prisma.MediaAssetWhereInput = q.approval === "PENDING" ? { approval: "PENDING", status: { notIn: ["UPLOADING", "FAILED"] } } : q.approval ? { approval: q.approval } : {};
+    const where: Prisma.MediaAssetWhereInput = { ...tenantWhere(scope), ...approval, ...(q.type ? { type: q.type } : {}), ...(q.status ? { status: q.status } : {}), ...(q.search ? { name: { contains: q.search, mode: "insensitive" } } : {}) };
     const { skip, take } = paginate(q);
     const [rows, total] = await repo.list(where, skip, take);
     const stats = scope.companyId ? await repo.stats(scope.companyId) : undefined;
@@ -67,7 +90,9 @@ export const mediaService = {
     const companyId = requireCompanyId(scope);
     const type = ALLOWED_MIME[body.contentType];
     const storageKey = `${companyId}/${nanoid(12)}/${sanitizeFileName(body.fileName)}`;
-    const asset = await repo.create({ companyId, name: sanitizeFileName(body.fileName), type, status: "UPLOADING", mimeType: body.contentType, sizeBytes: BigInt(body.sizeBytes), storageKey, tags: body.tags, uploadedById: actor.id });
+    // The Super Admin's own uploads, and companies switched to "no approval needed", skip the queue.
+    const needsApproval = actor.platformRole !== "SUPER_ADMIN" && (await prisma.company.findUnique({ where: { id: companyId }, select: { mediaApproval: true } }))?.mediaApproval !== false;
+    const asset = await repo.create({ companyId, approval: needsApproval ? "PENDING" : "APPROVED", name: sanitizeFileName(body.fileName), type, status: "UPLOADING", mimeType: body.contentType, sizeBytes: BigInt(body.sizeBytes), storageKey, tags: body.tags, uploadedById: actor.id });
     const ttl = uploadUrlTtlSec(body.sizeBytes);
     const uploadUrl = await presignPut(storageKey, body.contentType, ttl);
     return { asset: await toMediaDto(asset), uploadUrl, expiresInSec: ttl };
@@ -116,6 +141,27 @@ export const mediaService = {
     if (!m) throw new NotFoundError("Media");
     const updated = await repo.update(id, { name: body.name ? sanitizeFileName(body.name) : undefined, tags: body.tags });
     if (body.name && body.name !== m.name) await logActivity({ companyId: m.companyId, actor, action: "media.renamed", resourceType: "media", resourceId: id, summary: `${m.name} renamed to ${body.name}` });
+    return toMediaDto(updated);
+  },
+
+  /**
+   * The Super Admin approves a file (screens start showing it) or rejects it with a reason (screens
+   * stop showing it, including one approved earlier). Screens that use it get a new manifest, and the
+   * uploader is told in the portal and by email.
+   */
+  async review(actor: AuthUser, id: string, decision: { approval: "APPROVED" } | { approval: "REJECTED"; reason: string }) {
+    const m = await repo.findScoped(undefined, id);
+    if (!m) throw new NotFoundError("Media");
+    if (m.approval === decision.approval) throw new ConflictError(decision.approval === "APPROVED" ? "This file is already approved" : "This file is already rejected", "ALREADY_REVIEWED");
+    if (decision.approval === "APPROVED" && m.status !== "READY") throw new ConflictError("This file is still uploading or processing. Approve it once it is ready.", "MEDIA_NOT_READY");
+    const templateInstanceIds = (await repo.usage(m)).filter((p) => p.kind === "TEMPLATE_INSTANCE").map((p) => p.id);
+    const reason = decision.approval === "REJECTED" ? decision.reason : null;
+    const updated = await changeContent(m.companyId, { assetIds: [id], templateInstanceIds }, async (tx) => {
+      const u = await repo.update(id, { approval: decision.approval, rejectionReason: reason, reviewedAt: new Date(), reviewedById: actor.id }, tx);
+      await logActivity({ companyId: m.companyId, actor, action: decision.approval === "APPROVED" ? "media.approved" : "media.rejected", resourceType: "media", resourceId: id, summary: reason ? `${m.name} rejected: ${reason}` : `${m.name} approved` }, tx);
+      return u;
+    });
+    await notifyReview(updated, decision).catch((err) => logger.error({ err, mediaId: id }, "could not send the review notice"));
     return toMediaDto(updated);
   },
 

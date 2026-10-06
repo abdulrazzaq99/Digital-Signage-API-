@@ -24,6 +24,17 @@ export function passwordResetEmail(to: { email: string; name: string }, token: s
   return { to: to.email, subject: "Reset your Digital Signage password", text: `${lines.join("\n\n")}\n\n${link}\n\n${footer}`, html: layout(lines, { label: "Reset password", href: link }, footer) };
 }
 
+/** Tells the uploader whether the Super Admin approved or rejected their file. */
+export function mediaReviewEmail(to: { email: string; name: string }, fileName: string, decision: { approval: "APPROVED" } | { approval: "REJECTED"; reason: string }): MailMessage {
+  const href = `${env.APP_PUBLIC_URL.replace(/\/$/, "")}/portal/media`;
+  const approved = decision.approval === "APPROVED";
+  const lines = approved
+    ? [`Hi ${to.name},`, `Your file "${fileName}" has been approved. It now plays on every screen it is published to.`]
+    : [`Hi ${to.name},`, `Your file "${fileName}" was not approved, so it won't be shown on your screens.`, `Reason: ${decision.reason}`, "You can upload a corrected version from your media library."];
+  const footer = "You receive this email because you uploaded this file.";
+  return { to: to.email, subject: approved ? `Approved: ${fileName}` : `Not approved: ${fileName}`, text: `${lines.join("\n\n")}\n\n${href}\n\n${footer}`, html: layout(lines, { label: "Open media library", href }, footer) };
+}
+
 export function inviteEmail(to: { email: string; name: string }, companyName: string, invitedBy: string, token: string): MailMessage {
   const link = passwordLink(token);
   const lines = [`Hi ${to.name},`, `${invitedBy} has invited you to ${companyName} on Digital Signage. Set a password to activate your account. The link is valid for 7 days.`];

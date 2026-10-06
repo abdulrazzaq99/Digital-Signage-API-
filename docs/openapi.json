@@ -248,6 +248,9 @@
             "type": "string",
             "nullable": true
           },
+          "mediaApproval": {
+            "type": "boolean"
+          },
           "overLimit": {
             "type": "boolean"
           },
@@ -314,6 +317,7 @@
           "phone",
           "timezone",
           "plan",
+          "mediaApproval",
           "overLimit",
           "createdAt",
           "license"
@@ -371,6 +375,10 @@
           "plan": {
             "type": "string",
             "maxLength": 80
+          },
+          "mediaApproval": {
+            "type": "boolean",
+            "default": true
           },
           "screenLimit": {
             "type": "integer",
@@ -451,6 +459,9 @@
             "type": "string",
             "nullable": true,
             "maxLength": 80
+          },
+          "mediaApproval": {
+            "type": "boolean"
           }
         }
       },
@@ -1627,6 +1638,41 @@
           "createdAt": {
             "type": "string"
           },
+          "approval": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED"
+            ]
+          },
+          "rejectionReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "company": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
           "usedIn": {
             "type": "array",
             "items": {
@@ -1673,6 +1719,11 @@
           "failureReason",
           "uploadedBy",
           "createdAt",
+          "approval",
+          "rejectionReason",
+          "reviewedAt",
+          "reviewedBy",
+          "company",
           "usedIn",
           "thumbnailUrl"
         ]
@@ -1784,6 +1835,19 @@
             "maxItems": 20
           }
         }
+      },
+      "RejectMediaBody": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
       },
       "Playlist": {
         "type": "object",
@@ -6276,6 +6340,19 @@
             "required": false,
             "name": "status",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "APPROVED",
+                "REJECTED"
+              ]
+            },
+            "required": false,
+            "name": "approval",
+            "in": "query"
           }
         ],
         "responses": {
@@ -6771,6 +6848,136 @@
                   "required": [
                     "data"
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/media/{id}/approve": {
+      "post": {
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Super Admin only. Screens start showing the file.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Media"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/media/{id}/reject": {
+      "post": {
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Super Admin only. Screens stop showing the file; the uploader is told why.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectMediaBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Media"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }

@@ -7,8 +7,9 @@ import { id, int, optionalText, tags, text } from "../../core/validation/fields.
 
 export const mediaType = z.enum(["IMAGE", "VIDEO", "PDF"]);
 export const mediaStatus = z.enum(["UPLOADING", "PROCESSING", "READY", "FAILED"]);
+export const approvalStatus = z.enum(["PENDING", "APPROVED", "REJECTED"]);
 export const idParams = z.object({ id: id() });
-export const listMediaQuery = paginationQuery.extend({ search: optionalText(100), type: mediaType.optional(), status: mediaStatus.optional() });
+export const listMediaQuery = paginationQuery.extend({ search: optionalText(100), type: mediaType.optional(), status: mediaStatus.optional(), approval: approvalStatus.optional() });
 export const uploadUrlBody = z.object({
   fileName: text(200),
   contentType: z.enum(Object.keys(ALLOWED_MIME) as [keyof typeof ALLOWED_MIME, ...(keyof typeof ALLOWED_MIME)[]]),
@@ -18,9 +19,13 @@ export const uploadUrlBody = z.object({
 export const finalizeBody = z.object({ checksum: optionalText(128), width: int(1, 16_384).optional(), height: int(1, 16_384).optional(), durationSec: int(1, 86_400).optional(), pages: int(1, 2000).optional() }).openapi("FinalizeUploadBody");
 export const updateMediaBody = z.object({ name: text(200).optional(), tags: tags().optional() }).openapi("UpdateMediaBody");
 export const deleteQuery = z.object({ force: queryFlag(false) });
+export const rejectBody = z.object({ reason: text(500, 3) }).openapi("RejectMediaBody");
 
 export const mediaDto = z.object({
   id: z.string(), name: z.string(), type: mediaType, status: mediaStatus, mimeType: z.string(), sizeBytes: z.number(), checksum: z.string().nullable(), width: z.number().nullable(), height: z.number().nullable(), durationSec: z.number().nullable(), pages: z.number().nullable(), tags: z.array(z.string()), failureReason: z.string().nullable(), uploadedBy: z.string().nullable(), createdAt: z.string(),
+  /** PENDING files are not shown on screens until the Super Admin approves them. */
+  approval: approvalStatus, rejectionReason: z.string().nullable(), reviewedAt: z.string().nullable(), reviewedBy: z.string().nullable(),
+  company: z.object({ id: z.string(), name: z.string() }),
   usedIn: z.array(z.object({ id: z.string(), name: z.string(), kind: z.literal("PLAYLIST") })),
   thumbnailUrl: z.string().nullable(),
 }).openapi("Media");
@@ -36,4 +41,6 @@ registry.registerPath({ method: "get", path: "/media/{id}", tags: tag, security:
 registry.registerPath({ method: "patch", path: "/media/{id}", tags: tag, security: sec, request: { params: idParams, body: jsonBody(updateMediaBody) }, responses: { 200: jsonBody(envelope(mediaDto)) } });
 registry.registerPath({ method: "get", path: "/media/{id}/download-url", tags: tag, security: sec, request: { params: idParams }, responses: { 200: jsonBody(envelope(z.object({ url: z.string(), expiresInSec: z.number() }))) } });
 registry.registerPath({ method: "post", path: "/media/{id}/retry", tags: tag, security: sec, request: { params: idParams }, responses: { 200: jsonBody(envelope(mediaDto)) } });
+registry.registerPath({ method: "post", path: "/media/{id}/approve", tags: tag, security: sec, description: "Super Admin only. Screens start showing the file.", request: { params: idParams }, responses: { 200: jsonBody(envelope(mediaDto)), 409: jsonBody(ErrorEnvelope) } });
+registry.registerPath({ method: "post", path: "/media/{id}/reject", tags: tag, security: sec, description: "Super Admin only. Screens stop showing the file; the uploader is told why.", request: { params: idParams, body: jsonBody(rejectBody) }, responses: { 200: jsonBody(envelope(mediaDto)), 409: jsonBody(ErrorEnvelope) } });
 registry.registerPath({ method: "delete", path: "/media/{id}", tags: tag, security: sec, request: { params: idParams, query: deleteQuery }, responses: { 204: { description: "Deleted" }, 409: jsonBody(ErrorEnvelope) } });

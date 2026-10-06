@@ -4,6 +4,8 @@ import type { Prisma } from "../../generated/prisma/client.js";
 
 export const mediaInclude = {
   uploadedBy: { select: { name: true } },
+  reviewedBy: { select: { name: true } },
+  company: { select: { id: true, name: true } },
   playlistItems: { select: { playlist: { select: { id: true, name: true } } } },
   derivatives: { where: { kind: "THUMBNAIL" }, select: { storageKey: true }, take: 1 },
 } satisfies Prisma.MediaAssetInclude;
@@ -58,13 +60,15 @@ export const mediaRepository = {
     return [...new Set(items.map((i) => i.playlistId))];
   },
   stats: async (companyId: string) => {
-    const [total, ready, processing, failed, bytes] = await Promise.all([
+    const [total, ready, processing, failed, bytes, pending, rejected] = await Promise.all([
       prisma.mediaAsset.count({ where: { companyId } }),
       prisma.mediaAsset.count({ where: { companyId, status: "READY" } }),
       prisma.mediaAsset.count({ where: { companyId, status: { in: ["PROCESSING", "UPLOADING"] } } }),
       prisma.mediaAsset.count({ where: { companyId, status: "FAILED" } }),
       prisma.mediaAsset.aggregate({ where: { companyId, status: "READY" }, _sum: { sizeBytes: true } }),
+      prisma.mediaAsset.count({ where: { companyId, approval: "PENDING", status: { notIn: ["UPLOADING", "FAILED"] } } }),
+      prisma.mediaAsset.count({ where: { companyId, approval: "REJECTED" } }),
     ]);
-    return { total, ready, processing, failed, storageBytes: Number(bytes._sum.sizeBytes ?? 0) };
+    return { total, ready, processing, failed, pending, rejected, storageBytes: Number(bytes._sum.sizeBytes ?? 0) };
   },
 };

@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import type { z } from "zod";
 import { created, noContent, ok } from "../../core/http/envelope.js";
 import { input } from "../../core/middleware/validate.js";
-import type { finalizeBody, listMediaQuery, updateMediaBody, uploadUrlBody } from "./media.schemas.js";
+import type { finalizeBody, listMediaQuery, rejectBody, updateMediaBody, uploadUrlBody } from "./media.schemas.js";
 import { mediaService as service } from "./media.service.js";
 
 type P = { id: string };
@@ -40,6 +40,14 @@ export const mediaController = {
   async retry(req: Request, res: Response) {
     const { params } = input<unknown, unknown, P>(req);
     ok(res, await service.retry(req.user!, req.scope, params.id));
+  },
+  async approve(req: Request, res: Response) {
+    const { params } = input<unknown, unknown, P>(req);
+    ok(res, await service.review(req.user!, params.id, { approval: "APPROVED" }));
+  },
+  async reject(req: Request, res: Response) {
+    const { body, params } = input<z.infer<typeof rejectBody>, unknown, P>(req);
+    ok(res, await service.review(req.user!, params.id, { approval: "REJECTED", reason: body.reason }));
   },
   async remove(req: Request, res: Response) {
     const { params, query } = input<unknown, { force: boolean }, P>(req);

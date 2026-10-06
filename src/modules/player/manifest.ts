@@ -46,10 +46,10 @@ interface Content {
 }
 
 const pageSelect = { id: true, page: true, storageKey: true, mimeType: true, sizeBytes: true, checksum: true, width: true, height: true } as const;
-const assetSelect = { id: true, type: true, mimeType: true, storageKey: true, checksum: true, sizeBytes: true, width: true, height: true, durationSec: true, derivatives: { where: { kind: "PDF_PAGE" as const }, orderBy: { page: "asc" as const }, select: pageSelect } } as const;
+const assetSelect = { id: true, approval: true, type: true, mimeType: true, storageKey: true, checksum: true, sizeBytes: true, width: true, height: true, durationSec: true, derivatives: { where: { kind: "PDF_PAGE" as const }, orderBy: { page: "asc" as const }, select: pageSelect } } as const;
 const itemsInclude = { items: { orderBy: { position: "asc" as const }, include: { asset: { select: assetSelect } } } };
 
-type AssetRow = FileRef & { derivatives: { id: string; page: number | null; storageKey: string; mimeType: string | null; sizeBytes: number | null; checksum: string | null; width: number | null; height: number | null }[] };
+type AssetRow = FileRef & { approval: string } & { derivatives: { id: string; page: number | null; storageKey: string; mimeType: string | null; sizeBytes: number | null; checksum: string | null; width: number | null; height: number | null }[] };
 
 /**
  * Turns playlist rows into playback items. A PDF becomes its rendered page images (one page, or
@@ -58,7 +58,9 @@ type AssetRow = FileRef & { derivatives: { id: string; page: number | null; stor
 function playable(rows: { asset: AssetRow; page?: number | null; durationSec: number }[], files: Map<string, FileRef>): Item[] {
   const out: Item[] = [];
   for (const row of rows) {
-    const { derivatives, ...asset } = row.asset;
+    // Files waiting for (or refused) the Super Admin's approval are left out until approved.
+    if (row.asset.approval !== "APPROVED") continue;
+    const { derivatives, approval: _approval, ...asset } = row.asset;
     const pages = asset.type === "PDF" ? derivatives.filter((d) => row.page == null || d.page === row.page) : [];
     if (!pages.length) {
       files.set(asset.id, asset);
@@ -99,6 +101,9 @@ async function loadContent(tx: Tx, companyId: string, kind: AssignmentKind, refI
   if (kind === "TEMPLATE_INSTANCE") {
     const t = await tx.templateInstance.findFirst({ where: { id: refId, companyId } });
     if (!t) return null;
+    // The rendered image contains the template's pictures, so it waits until every one is approved.
+    const [held] = await tx.$queryRaw<{ n: number }[]>`SELECT COUNT(*)::int AS "n" FROM "MediaAsset" WHERE "companyId" = ${companyId} AND "approval" <> 'APPROVED' AND "id" IN (SELECT v.value FROM "TemplateInstance" AS ti, jsonb_each_text(ti."values") AS v WHERE ti."id" = ${t.id})`;
+    if (held?.n) return { name: t.name, items: [], layout: null };
     // The rendered output is addressed by the instance ID; a re-render bumps the version and the checksum.
     const items = t.outputKey ? [{ assetId: use({ id: t.id, type: "IMAGE", mimeType: t.outputMimeType ?? "image/png", storageKey: t.outputKey, checksum: t.outputChecksum, sizeBytes: t.outputSizeBytes ?? 0, width: t.outputWidth, height: t.outputHeight, durationSec: null }), position: 0, durationSec: TEMPLATE_SEC }] : [];
     return { name: t.name, items, layout: null };

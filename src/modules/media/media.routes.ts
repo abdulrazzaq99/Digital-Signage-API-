@@ -4,7 +4,7 @@ import { authenticate } from "../../core/middleware/authenticate.js";
 import { authorize } from "../../core/middleware/authorize.js";
 import { validate } from "../../core/middleware/validate.js";
 import { mediaController as c } from "./media.controller.js";
-import { deleteQuery, finalizeBody, idParams, listMediaQuery, updateMediaBody, uploadUrlBody } from "./media.schemas.js";
+import { deleteQuery, finalizeBody, idParams, listMediaQuery, rejectBody, updateMediaBody, uploadUrlBody } from "./media.schemas.js";
 
 const editors = ["ADMIN", "EDITOR"] as const;
 
@@ -18,4 +18,6 @@ mediaRouter.post("/:id/upload-url", authorize({ roles: [...editors] }), validate
 mediaRouter.post("/:id/finalize", authorize({ roles: [...editors] }), validate({ params: idParams, body: finalizeBody }), asyncHandler(c.finalize));
 mediaRouter.post("/:id/retry", authorize({ roles: [...editors] }), validate({ params: idParams }), asyncHandler(c.retry));
 mediaRouter.patch("/:id", authorize({ roles: [...editors] }), validate({ params: idParams, body: updateMediaBody }), asyncHandler(c.update));
+mediaRouter.post("/:id/approve", authorize({ platformOnly: true }), validate({ params: idParams }), asyncHandler(c.approve));
+mediaRouter.post("/:id/reject", authorize({ platformOnly: true }), validate({ params: idParams, body: rejectBody }), asyncHandler(c.reject));
 mediaRouter.delete("/:id", authorize({ roles: [...editors] }), validate({ params: idParams, query: deleteQuery }), asyncHandler(c.remove));

@@ -221,6 +221,7 @@ describe("media processing", () => {
     const { asset } = await upload(ctx.auth, { fileName: "menu.pdf", contentType: "application/pdf", bytes: pdfBytes(3) });
     await finalize(ctx.auth, asset.id);
     await mediaConvert({ assetId: asset.id, companyId: ctx.company.id });
+    await prisma.mediaAsset.update({ where: { id: asset.id }, data: { approval: "APPROVED" } }); // approval is covered in approval.test.ts
     const pages = await prisma.mediaDerivative.findMany({ where: { assetId: asset.id, kind: "PDF_PAGE" }, orderBy: { page: "asc" } });
 
     expect((await api().post("/api/v1/playlists").set(ctx.auth).send({ name: "Bad", items: [{ assetId: asset.id, durationSec: 5, page: 4 }] })).body.error.code).toBe("INVALID_PAGE");
