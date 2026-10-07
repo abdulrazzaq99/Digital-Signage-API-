@@ -6,6 +6,7 @@ import { logger } from "./core/middleware/logger.js";
 import { installProcessHandlers } from "./core/process.js";
 import { QUEUE_NAME } from "./core/queue/queues.js";
 import { closeRedis, createRedisConnection } from "./core/redis/client.js";
+import { closeRealtime } from "./core/realtime/server.js";
 import { licenseExpirySweep } from "./jobs/license.expiry.js";
 import { mediaCleanup } from "./jobs/media.cleanup.js";
 import { offerExpirySweep } from "./jobs/offer.expiry.js";
@@ -36,5 +37,5 @@ for (const s of sweeps) s.start();
 installProcessHandlers("Worker", async () => {
   for (const s of sweeps) s.stop();
   await worker.close();
-  await Promise.allSettled([disconnectDatabase(), closeRedis()]);
+  await Promise.allSettled([disconnectDatabase(), closeRedis(), closeRealtime()]);
 });

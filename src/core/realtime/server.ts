@@ -1,5 +1,6 @@
 import type { Server as HttpServer } from "node:http";
 import { createAdapter } from "@socket.io/redis-adapter";
+import { Emitter } from "@socket.io/redis-emitter";
 import { Server, type Socket } from "socket.io";
 import { z } from "zod";
 import { env } from "../../config/env.js";
@@ -137,16 +138,33 @@ async function markOnline(screenId: string, companyId: string): Promise<void> {
   }
 }
 
+let emitter: Emitter | null = null;
+let emitterRedis: ReturnType<typeof createRedisConnection> | null = null;
+
+/**
+ * Where to send events from. The API process has the Socket.IO server; the worker has none, so it
+ * publishes through Redis and the API's adapter delivers to the connected sockets. Without this,
+ * events raised by jobs (media ready, template rendered, timed pushes) never reached anyone.
+ */
+function namespace(name: "/player" | "/app") {
+  if (io) return io.of(name);
+  if (!emitter) {
+    emitterRedis = createRedisConnection();
+    emitter = new Emitter(emitterRedis);
+  }
+  return emitter.of(name);
+}
+
 export function emitToScreen(screenId: string, event: EventName, payload: unknown): void {
-  io?.of("/player").to(screenRoom(screenId)).emit(event, payload);
+  namespace("/player").to(screenRoom(screenId)).emit(event, payload);
 }
 
 export function emitToCompany(companyId: string, event: EventName, payload: unknown): void {
-  io?.of("/app").to(companyRoom(companyId)).to(platformRoom).emit(event, payload);
+  namespace("/app").to(companyRoom(companyId)).to(platformRoom).emit(event, payload);
 }
 
 export function emitToPlatform(event: EventName, payload: unknown): void {
-  io?.of("/app").to(platformRoom).emit(event, payload);
+  namespace("/app").to(platformRoom).emit(event, payload);
 }
 
 export function getIo(): Server | null {
@@ -156,4 +174,7 @@ export function getIo(): Server | null {
 export async function closeRealtime(): Promise<void> {
   await new Promise<void>((resolve) => (io ? io.close(() => resolve()) : resolve()));
   io = null;
+  await emitterRedis?.quit().catch(() => undefined);
+  emitterRedis = null;
+  emitter = null;
 }

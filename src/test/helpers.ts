@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { closeRealtime } from "../core/realtime/server.js";
 import request from "supertest";
 import { createApp } from "../app.js";
 import { prisma } from "../core/db/prisma.js";
@@ -22,6 +23,7 @@ export async function resetDatabase(): Promise<void> {
 }
 
 export async function closeAll(): Promise<void> {
+  await closeRealtime();
   await prisma.$disconnect();
   await redis.quit().catch(() => undefined);
 }
