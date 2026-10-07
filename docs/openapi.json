@@ -665,6 +665,10 @@
               ]
             }
           },
+          "scheduled": {
+            "type": "number",
+            "description": "Current or upcoming schedules"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -686,6 +690,7 @@
           "itemCount",
           "totalDurationSec",
           "assignedTo",
+          "scheduled",
           "createdAt",
           "updatedAt"
         ]

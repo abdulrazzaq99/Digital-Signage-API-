@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { prisma } from "../../core/db/prisma.js";
 import { changeContent } from "../../core/assignments/content.js";
 import { emitAssignmentUpdated, publishAssignment } from "../../core/assignments/publish.js";
 import { canvasesShowing } from "../../core/assignments/refs.js";
@@ -16,10 +17,13 @@ import type { addItemBody, createPlaylistBody, listPlaylistsQuery, publishBody, 
 const DEFAULT_DURATION = { IMAGE: 10, VIDEO: 30, PDF: 15 } as const;
 
 async function toDto(p: PlaylistRow, assigned: { id: string; name: string }[] = [], withItems = true) {
+  const now = new Date();
+  // Current or upcoming schedules, so a scheduled playlist can say so.
+  const scheduled = await prisma.schedule.count({ where: { playlistId: p.id, OR: [{ endsAt: null }, { endsAt: { gt: now } }] } });
   const items = withItems
     ? await Promise.all(p.items.map(async (it) => ({ id: it.id, position: it.position, durationSec: it.durationSec, page: it.page, asset: { id: it.asset.id, name: it.asset.name, type: it.asset.type, status: it.asset.status, thumbnailUrl: it.asset.derivatives[0]?.storageKey ? await presignGet(it.asset.derivatives[0].storageKey) : it.asset.type === "IMAGE" ? await presignGet(it.asset.storageKey) : null } })))
     : undefined;
-  return { id: p.id, name: p.name, status: p.status, version: p.version, itemCount: p.items.length, totalDurationSec: p.items.reduce((a, b) => a + b.durationSec, 0), assignedTo: assigned, createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString(), ...(items ? { items } : {}) };
+  return { id: p.id, name: p.name, status: p.status, version: p.version, itemCount: p.items.length, totalDurationSec: p.items.reduce((a, b) => a + b.durationSec, 0), assignedTo: assigned, scheduled, createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString(), ...(items ? { items } : {}) };
 }
 
 type ItemInput = { id?: string; assetId: string; durationSec?: number; page?: number | null };

@@ -25,6 +25,8 @@ describe("schedule writes", () => {
     expect(results.map((r) => r.status).sort()).toEqual([201, 409, 409, 409, 409]);
     expect(results.filter((r) => r.status === 409).every((r) => r.body.error.code === "SCHEDULE_CONFLICT")).toBe(true);
     expect(await prisma.schedule.count()).toBe(1);
+    // The playlist now reports its upcoming schedule, so the portal can show it as Scheduled.
+    expect((await api().get(`/api/v1/playlists/${playlist.id}`).set(ctx.auth)).body.data.scheduled).toBe(1);
   });
 
   it("refuses scheduling an empty playlist", async () => {

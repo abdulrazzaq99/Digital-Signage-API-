@@ -19,7 +19,7 @@ export const reorderBody = z.object({ itemIds: list(id(), 1000, 1) }).openapi("R
 export const publishBody = z.object({ screenIds: list(id(), 500).default([]), groupIds: list(id(), 500).default([]) }).refine((b) => b.screenIds.length + b.groupIds.length > 0, "Select at least one screen or group").openapi("PublishPlaylistBody");
 
 export const playlistItemDto = z.object({ id: z.string(), position: z.number(), durationSec: z.number(), page: z.number().nullable(), asset: z.object({ id: z.string(), name: z.string(), type: z.string(), status: z.string(), thumbnailUrl: z.string().nullable() }) }).openapi("PlaylistItem");
-export const playlistDto = z.object({ id: z.string(), name: z.string(), status: z.string(), version: z.number(), itemCount: z.number(), totalDurationSec: z.number(), assignedTo: z.array(z.object({ id: z.string(), name: z.string() })), createdAt: z.string(), updatedAt: z.string(), items: z.array(playlistItemDto).optional() }).openapi("Playlist");
+export const playlistDto = z.object({ id: z.string(), name: z.string(), status: z.string(), version: z.number(), itemCount: z.number(), totalDurationSec: z.number(), assignedTo: z.array(z.object({ id: z.string(), name: z.string() })), scheduled: z.number().describe("Current or upcoming schedules"), createdAt: z.string(), updatedAt: z.string(), items: z.array(playlistItemDto).optional() }).openapi("Playlist");
 export const publishResultDto = z.object({ version: z.number(), screens: z.array(z.object({ id: z.string(), name: z.string(), status: z.string(), version: z.number() })) }).openapi("PublishResult");
 
 const tag = ["Playlists"];
