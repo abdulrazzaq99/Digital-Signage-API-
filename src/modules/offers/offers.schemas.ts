@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { paginationQuery } from "../../core/http/pagination.js";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
+import { targetAudience, targetAudienceInput } from "../../core/targeting/audience.js";
 import { dateTime, email, endAfterStart, id, list, optionalField, optionalText, phone, text } from "../../core/validation/fields.js";
 
 export const idParams = z.object({ id: id() });
@@ -19,15 +20,17 @@ const lines = list(text(200), 50);
 const offerFields = {
   title: text(120, 3), category: offerCategory, summary: text(300, 10), description: text(5000, 10), instructions: text(2000, 5),
   contact: contactInput, included: lines, steps: lines, imageKey: optionalText(300), startsAt: dateTime().nullable().optional(), endsAt: dateTime().nullable().optional(),
+  /** Which locations see it in the Marketplace. */
+  audience: targetAudienceInput,
 };
 export const createOfferBody = z
-  .object({ ...offerFields, included: lines.default([]), steps: lines.default([]) })
+  .object({ ...offerFields, included: lines.default([]), steps: lines.default([]), audience: targetAudienceInput.default({ kind: "all" }) })
   .superRefine(endAfterStart("startsAt", "endsAt"))
   .openapi("CreateOfferBody");
 /** Only the fields sent change; the service checks the window against the stored dates. */
 export const updateOfferBody = z.object(offerFields).partial().superRefine(endAfterStart("startsAt", "endsAt")).openapi("UpdateOfferBody");
 
-export const offerDto = z.object({ id: z.string(), title: z.string(), category: z.string(), status: offerStatus, summary: z.string(), description: z.string(), instructions: z.string(), contact, included: z.array(z.string()), steps: z.array(z.string()), imageUrl: z.string().nullable(), startsAt: z.string().nullable(), endsAt: z.string().nullable(), publishedAt: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(), stats: z.object({ totalViews: z.number(), uniqueViewers: z.number(), lastViewedAt: z.string().nullable() }).optional() }).openapi("Offer");
+export const offerDto = z.object({ id: z.string(), title: z.string(), category: z.string(), status: offerStatus, summary: z.string(), description: z.string(), instructions: z.string(), contact, included: z.array(z.string()), steps: z.array(z.string()), imageUrl: z.string().nullable(), audience: targetAudience.optional(), startsAt: z.string().nullable(), endsAt: z.string().nullable(), publishedAt: z.string().nullable(), createdAt: z.string(), updatedAt: z.string(), stats: z.object({ totalViews: z.number(), uniqueViewers: z.number(), lastViewedAt: z.string().nullable() }).optional() }).openapi("Offer");
 
 const tag = ["Offers"];
 const sec = [{ bearerAuth: [] }];

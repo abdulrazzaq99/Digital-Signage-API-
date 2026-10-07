@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authRouter } from "./auth/auth.routes.js";
+import { categoriesRouter } from "./categories/categories.routes.js";
 import { companiesRouter } from "./companies/companies.routes.js";
 import { companyLicenseRouter, licensesRouter } from "./licenses/licenses.routes.js";
 import { usersRouter } from "./users/users.routes.js";
@@ -21,6 +22,7 @@ export const apiRouter = Router();
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/companies/:companyId/license", companyLicenseRouter);
 apiRouter.use("/companies", companiesRouter);
+apiRouter.use("/categories", categoriesRouter);
 apiRouter.use("/users", usersRouter);
 apiRouter.use("/licenses", licensesRouter);
 apiRouter.use("/screens", screensRouter);

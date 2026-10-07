@@ -6,7 +6,7 @@ import { clearableField, clearableText, id, int, optionalField, optionalText, ph
 export const companyStatus = z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]);
 export const licenseState = z.enum(["ACTIVE", "SUSPENDED", "DISABLED", "EXPIRED"]);
 
-export const listCompaniesQuery = paginationQuery.extend({ search: optionalText(100), status: companyStatus.optional() });
+export const listCompaniesQuery = paginationQuery.extend({ search: optionalText(100), status: companyStatus.optional(), categoryId: z.union([id(), z.literal("none")]).optional() });
 export const companyIdParams = z.object({ id: id() });
 export const createCompanyBody = z.object({
   name: text(120, 2),
@@ -18,6 +18,8 @@ export const createCompanyBody = z.object({
   plan: optionalText(80),
   /** Uploads wait for the Super Admin's approval before screens show them. */
   mediaApproval: z.boolean().default(true),
+  /** Location category (Kiosk, Restaurant, ...); decides which Head Office content it sees. */
+  categoryId: id().nullable().optional(),
   screenLimit: int(1, 10_000),
   licenseState: licenseState.default("ACTIVE"),
 }).openapi("CreateCompanyBody");
@@ -31,10 +33,11 @@ export const updateCompanyBody = z.object({
   timezone: timezone().optional(),
   plan: clearableText(80),
   mediaApproval: z.boolean().optional(),
+  categoryId: id().nullable().optional(),
 }).openapi("UpdateCompanyBody");
 
 export const companyDto = z.object({
-  id: z.string(), code: z.string(), name: z.string(), status: companyStatus, website: z.string().nullable(), industry: z.string().nullable(), phone: z.string().nullable(), timezone: z.string(), plan: z.string().nullable(), mediaApproval: z.boolean(), overLimit: z.boolean(), createdAt: z.string(),
+  id: z.string(), code: z.string(), name: z.string(), status: companyStatus, website: z.string().nullable(), industry: z.string().nullable(), phone: z.string().nullable(), timezone: z.string(), plan: z.string().nullable(), mediaApproval: z.boolean(), category: z.object({ id: z.string(), name: z.string() }).nullable(), overLimit: z.boolean(), createdAt: z.string(),
   license: z.object({ screenLimit: z.number(), state: licenseState, overLimit: z.boolean() }).nullable(),
   counts: z.object({ screens: z.number(), online: z.number(), offline: z.number(), available: z.number() }).optional(),
 }).openapi("Company");

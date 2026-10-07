@@ -3,13 +3,14 @@ import type { z } from "zod";
 import { created, noContent, ok } from "../../core/http/envelope.js";
 import { input } from "../../core/middleware/validate.js";
 import type { publishBody } from "../playlists/playlists.schemas.js";
-import type { createInstanceBody, createTemplateBody, updateInstanceBody } from "./templates.schemas.js";
+import type { createInstanceBody, createTemplateBody, updateInstanceBody, updateTemplateBody } from "./templates.schemas.js";
 import { templatesService as service } from "./templates.service.js";
 
 type P = { id: string };
 
 export const templatesController = {
-  async list(_req: Request, res: Response) { ok(res, await service.list()); },
+  async list(req: Request, res: Response) { ok(res, await service.list(req.scope)); },
+  async update(req: Request, res: Response) { const { body, params } = input<z.infer<typeof updateTemplateBody>, unknown, P>(req); ok(res, await service.update(req.user!, params.id, body)); },
   async create(req: Request, res: Response) { const { body } = input<z.infer<typeof createTemplateBody>>(req); created(res, await service.create(req.user!, req.scope, body)); },
   async remove(req: Request, res: Response) { const { params } = input<unknown, unknown, P>(req); await service.remove(req.user!, req.scope, params.id); noContent(res); },
   async listInstances(req: Request, res: Response) { ok(res, await service.listInstances(req.scope)); },

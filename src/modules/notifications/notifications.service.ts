@@ -5,6 +5,7 @@ import { prisma } from "../../core/db/prisma.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { paginate, pageMeta } from "../../core/http/pagination.js";
 import { enqueue, JobNames } from "../../core/queue/queues.js";
+import { assertAudienceExists as assertTargetsExist } from "../../core/targeting/audience.js";
 import { Prisma, type Notification } from "../../generated/prisma/client.js";
 import type { createNotificationBody, listNotificationsQuery, subscribeBody } from "./notifications.schemas.js";
 
@@ -16,22 +17,25 @@ function toInboxDto(n: Notification) {
   return { id: n.id, title: n.title, body: n.body, type: n.type, targetId: n.targetId, sentAt: (n.sentAt ?? n.createdAt).toISOString(), createdAt: n.createdAt.toISOString() };
 }
 
-/** Sent notifications whose audience includes the user: everyone, their company, or them by ID. */
-function addressedTo(user: AuthUser): Prisma.NotificationWhereInput {
+/** Sent notifications whose audience includes the user: everyone, their company's category, their company, or them by ID. */
+async function addressedTo(user: AuthUser): Promise<Prisma.NotificationWhereInput> {
   const kind = (k: string): Prisma.NotificationWhereInput => ({ audience: { path: ["kind"], equals: k } });
+  const categoryId = user.companyId ? (await prisma.company.findUnique({ where: { id: user.companyId }, select: { categoryId: true } }))?.categoryId : null;
   return {
     sentAt: { not: null },
     OR: [
       kind("all"),
+      ...(categoryId ? [{ AND: [kind("categories"), { audience: { path: ["categoryIds"], array_contains: [categoryId] } }] }] : []),
       ...(user.companyId ? [{ AND: [kind("companies"), { audience: { path: ["companyIds"], array_contains: [user.companyId] } }] }] : []),
       { AND: [kind("users"), { audience: { path: ["userIds"], array_contains: [user.id] } }] },
     ],
   };
 }
 
-/** Every company or user the audience names must exist; a typo would otherwise silently reach nobody. */
+/** Every category, company or user the audience names must exist; a typo would otherwise silently reach nobody. */
 async function assertAudienceExists(audience: z.infer<typeof createNotificationBody>["audience"]) {
   if (audience.kind === "all") return;
+  if (audience.kind === "categories") return assertTargetsExist(audience);
   const ids = [...new Set(audience.kind === "companies" ? audience.companyIds : audience.userIds)];
   const found = new Set(
     audience.kind === "companies"
@@ -67,14 +71,14 @@ export const notificationsService = {
   },
 
   async inbox(actor: AuthUser, q: z.infer<typeof listNotificationsQuery>) {
-    const where = addressedTo(actor);
+    const where = await addressedTo(actor);
     const { skip, take } = paginate(q);
     const [rows, total] = await Promise.all([prisma.notification.findMany({ where, orderBy: { sentAt: "desc" }, skip, take }), prisma.notification.count({ where })]);
     return { data: rows.map(toInboxDto), meta: pageMeta(q, total) };
   },
 
   async get(actor: AuthUser, id: string) {
-    const n = await prisma.notification.findFirst({ where: actor.platformRole === "SUPER_ADMIN" ? { id } : { AND: [{ id }, addressedTo(actor)] } });
+    const n = await prisma.notification.findFirst({ where: actor.platformRole === "SUPER_ADMIN" ? { id } : { AND: [{ id }, await addressedTo(actor)] } });
     if (!n) throw new NotFoundError("Notification");
     return toInboxDto(n);
   },

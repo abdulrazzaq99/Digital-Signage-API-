@@ -15,6 +15,7 @@ const NAMED = {
   campaign: { table: "ScratchCampaign", column: "title", perCompany: false, label: "A campaign with this title already exists" },
   offer: { table: "Offer", column: "title", perCompany: false, label: "An offer with this title already exists" },
   company: { table: "Company", column: "name", perCompany: false, label: "A company with this name already exists" },
+  category: { table: "LocationCategory", column: "name", perCompany: false, label: "A category with this name already exists" },
 } as const;
 
 export type NamedKind = keyof typeof NAMED;

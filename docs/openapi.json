@@ -209,6 +209,43 @@
           "newPassword"
         ]
       },
+      "LocationCategory": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "companies": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "companies",
+          "createdAt"
+        ]
+      },
+      "CategoryBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
       "Company": {
         "type": "object",
         "properties": {
@@ -250,6 +287,22 @@
           },
           "mediaApproval": {
             "type": "boolean"
+          },
+          "category": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
           },
           "overLimit": {
             "type": "boolean"
@@ -318,6 +371,7 @@
           "timezone",
           "plan",
           "mediaApproval",
+          "category",
           "overLimit",
           "createdAt",
           "license"
@@ -379,6 +433,11 @@
           "mediaApproval": {
             "type": "boolean",
             "default": true
+          },
+          "categoryId": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^c[a-z0-9]{20,31}$"
           },
           "screenLimit": {
             "type": "integer",
@@ -462,6 +521,11 @@
           },
           "mediaApproval": {
             "type": "boolean"
+          },
+          "categoryId": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^c[a-z0-9]{20,31}$"
           }
         }
       },
@@ -2677,6 +2741,9 @@
           },
           "createdAt": {
             "type": "string"
+          },
+          "audience": {
+            "$ref": "#/components/schemas/TargetAudience"
           }
         },
         "required": [
@@ -2688,6 +2755,68 @@
           "isGlobal",
           "usedIn",
           "createdAt"
+        ]
+      },
+      "TargetAudience": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "all"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "categories"
+                ]
+              },
+              "categoryIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "kind",
+              "categoryIds"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "companies"
+                ]
+              },
+              "companyIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "kind",
+              "companyIds"
+            ]
+          }
         ]
       },
       "CreateTemplateBody": {
@@ -2817,6 +2946,78 @@
             },
             "minItems": 1,
             "maxItems": 20
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "all"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "categories"
+                    ]
+                  },
+                  "categoryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "kind",
+                  "categoryIds"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "companies"
+                    ]
+                  },
+                  "companyIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  }
+                },
+                "required": [
+                  "kind",
+                  "companyIds"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "default": {
+              "kind": "all"
+            }
           }
         },
         "required": [
@@ -2824,6 +3025,84 @@
           "category",
           "fields"
         ]
+      },
+      "UpdateTemplateBody": {
+        "type": "object",
+        "properties": {
+          "audience": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "all"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "categories"
+                    ]
+                  },
+                  "categoryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "kind",
+                  "categoryIds"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "companies"
+                    ]
+                  },
+                  "companyIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  }
+                },
+                "required": [
+                  "kind",
+                  "companyIds"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": [
+          "audience"
+        ],
+        "additionalProperties": false
       },
       "TemplateInstance": {
         "type": "object",
@@ -2992,6 +3271,9 @@
           "imageUrl": {
             "type": "string",
             "nullable": true
+          },
+          "audience": {
+            "$ref": "#/components/schemas/TargetAudience"
           },
           "startsAt": {
             "type": "string",
@@ -3169,6 +3451,78 @@
             "type": "string",
             "nullable": true,
             "format": "date-time"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "all"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "categories"
+                    ]
+                  },
+                  "categoryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "kind",
+                  "categoryIds"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "companies"
+                    ]
+                  },
+                  "companyIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  }
+                },
+                "required": [
+                  "kind",
+                  "companyIds"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "default": {
+              "kind": "all"
+            }
           }
         },
         "required": [
@@ -3296,6 +3650,75 @@
             "type": "string",
             "nullable": true,
             "format": "date-time"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "all"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "categories"
+                    ]
+                  },
+                  "categoryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "kind",
+                  "categoryIds"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "companies"
+                    ]
+                  },
+                  "companyIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  }
+                },
+                "required": [
+                  "kind",
+                  "companyIds"
+                ],
+                "additionalProperties": false
+              }
+            ]
           }
         }
       },
@@ -3337,6 +3760,9 @@
           "artworkUrl": {
             "type": "string",
             "nullable": true
+          },
+          "audience": {
+            "$ref": "#/components/schemas/TargetAudience"
           },
           "prizes": {
             "type": "array",
@@ -3482,6 +3908,78 @@
             },
             "minItems": 1,
             "maxItems": 50
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "all"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "categories"
+                    ]
+                  },
+                  "categoryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "kind",
+                  "categoryIds"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "companies"
+                    ]
+                  },
+                  "companyIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  }
+                },
+                "required": [
+                  "kind",
+                  "companyIds"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "default": {
+              "kind": "all"
+            }
           }
         },
         "required": [
@@ -3531,6 +4029,75 @@
             "type": "string",
             "nullable": true,
             "maxLength": 300
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "all"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "categories"
+                    ]
+                  },
+                  "categoryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "kind",
+                  "categoryIds"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "companies"
+                    ]
+                  },
+                  "companyIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  }
+                },
+                "required": [
+                  "kind",
+                  "companyIds"
+                ],
+                "additionalProperties": false
+              }
+            ]
           }
         }
       },
@@ -3837,6 +4404,28 @@
                   "kind": {
                     "type": "string",
                     "enum": [
+                      "categories"
+                    ]
+                  },
+                  "categoryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "kind",
+                  "categoryIds"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
                       "companies"
                     ]
                   },
@@ -3989,6 +4578,31 @@
                 },
                 "required": [
                   "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "categories"
+                    ]
+                  },
+                  "categoryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^c[a-z0-9]{20,31}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "kind",
+                  "categoryIds"
                 ],
                 "additionalProperties": false
               },
@@ -4618,6 +5232,212 @@
         }
       }
     },
+    "/categories": {
+      "get": {
+        "tags": [
+          "Categories"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Location categories (Kiosk, Restaurant, ...) with how many locations are in each.",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/LocationCategory"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Categories"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Super Admin only.",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/LocationCategory"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/categories/{id}": {
+      "patch": {
+        "tags": [
+          "Categories"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Super Admin only. Renames a category.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/LocationCategory"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Categories"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Super Admin only. Refused while locations or content use it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/companies": {
       "get": {
         "tags": [
@@ -4671,6 +5491,25 @@
             },
             "required": false,
             "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^c[a-z0-9]{20,31}$"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "none"
+                  ]
+                }
+              ]
+            },
+            "required": false,
+            "name": "categoryId",
             "in": "query"
           }
         ],
@@ -8535,6 +9374,64 @@
       }
     },
     "/templates/{id}": {
+      "patch": {
+        "tags": [
+          "Templates"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Super Admin only. Changes which locations can use the template.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^c[a-z0-9]{20,31}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Template"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "Templates"

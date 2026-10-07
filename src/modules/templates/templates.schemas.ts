@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/registry.js";
+import { targetAudience, targetAudienceInput } from "../../core/targeting/audience.js";
 import { hexColour, id, int, list, slug, text } from "../../core/validation/fields.js";
 import { publishBody, publishResultDto } from "../playlists/playlists.schemas.js";
 
@@ -45,18 +46,21 @@ const templateValues = z.record(slug(60), z.string().trim().max(2000, "Must be a
 
 export type TemplateField = z.infer<typeof templateField>;
 export const createTemplateBody = z
-  .object({ name: text(120, 2), category: text(60, 2), orientation: z.enum(["LANDSCAPE", "PORTRAIT"]).default("LANDSCAPE"), fields: list(templateFieldInput, 20, 1) })
+  .object({ name: text(120, 2), category: text(60, 2), orientation: z.enum(["LANDSCAPE", "PORTRAIT"]).default("LANDSCAPE"), fields: list(templateFieldInput, 20, 1), audience: targetAudienceInput.default({ kind: "all" }) })
   .openapi("CreateTemplateBody");
+/** Who may use the template; locations already using it keep their copies. */
+export const updateTemplateBody = z.object({ audience: targetAudienceInput }).strict().openapi("UpdateTemplateBody");
 export const createInstanceBody = z.object({ templateId: id(), name: text(120), values: templateValues }).openapi("CreateTemplateInstanceBody");
 export const updateInstanceBody = z.object({ name: text(120).optional(), values: templateValues.optional() }).openapi("UpdateTemplateInstanceBody");
 
-export const templateDto = z.object({ id: z.string(), name: z.string(), category: z.string(), orientation: z.string(), fields: z.array(templateField), isGlobal: z.boolean(), usedIn: z.number(), createdAt: z.string() }).openapi("Template");
+export const templateDto = z.object({ id: z.string(), name: z.string(), category: z.string(), orientation: z.string(), fields: z.array(templateField), isGlobal: z.boolean(), usedIn: z.number(), createdAt: z.string(), audience: targetAudience.optional() }).openapi("Template");
 export const instanceDto = z.object({ id: z.string(), templateId: z.string(), templateName: z.string(), name: z.string(), values: z.record(z.string(), z.string()), outputUrl: z.string().nullable(), rendered: z.boolean(), rendering: z.boolean(), createdAt: z.string(), updatedAt: z.string() }).openapi("TemplateInstance");
 
 const tag = ["Templates"];
 const sec = [{ bearerAuth: [] }];
 registry.registerPath({ method: "get", path: "/templates", tags: tag, security: sec, responses: { 200: jsonBody(envelope(z.array(templateDto))) } });
 registry.registerPath({ method: "post", path: "/templates", tags: tag, security: sec, request: { body: jsonBody(createTemplateBody) }, responses: { 201: jsonBody(envelope(templateDto)), 403: jsonBody(ErrorEnvelope) } });
+registry.registerPath({ method: "patch", path: "/templates/{id}", tags: tag, security: sec, description: "Super Admin only. Changes which locations can use the template.", request: { params: idParams, body: jsonBody(updateTemplateBody) }, responses: { 200: jsonBody(envelope(templateDto)) } });
 registry.registerPath({ method: "delete", path: "/templates/{id}", tags: tag, security: sec, request: { params: idParams }, responses: { 204: { description: "Deleted" } } });
 registry.registerPath({ method: "get", path: "/template-instances", tags: tag, security: sec, responses: { 200: jsonBody(envelope(z.array(instanceDto))) } });
 registry.registerPath({ method: "post", path: "/template-instances", tags: tag, security: sec, request: { body: jsonBody(createInstanceBody) }, responses: { 201: jsonBody(envelope(instanceDto)), 400: jsonBody(ErrorEnvelope) } });

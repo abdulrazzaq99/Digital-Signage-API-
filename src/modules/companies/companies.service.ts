@@ -2,7 +2,8 @@ import type { AuthUser, TenantScope } from "../../core/auth/scope.js";
 import { logActivity } from "../../core/audit/activity.js";
 import { withTransaction } from "../../core/db/transaction.js";
 import { assertNameFree } from "../../core/validation/names.js";
-import { ConflictError, ForbiddenError, NotFoundError } from "../../core/errors/AppError.js";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
+import { prisma } from "../../core/db/prisma.js";
 import { logger } from "../../core/middleware/logger.js";
 import { enqueue, JobNames } from "../../core/queue/queues.js";
 import { paginate, pageMeta, type PaginationQuery } from "../../core/http/pagination.js";
@@ -15,10 +16,14 @@ type CompanyRow = NonNullable<Awaited<ReturnType<typeof repo.findById>>>;
 
 function toDto(c: CompanyRow, counts?: { screens: number; online: number; offline: number }) {
   return {
-    id: c.id, code: c.code, name: c.name, status: c.status, website: c.website, industry: c.industry, phone: c.phone, timezone: c.timezone, plan: c.plan, mediaApproval: c.mediaApproval, overLimit: c.overLimit, createdAt: c.createdAt.toISOString(),
+    id: c.id, code: c.code, name: c.name, status: c.status, website: c.website, industry: c.industry, phone: c.phone, timezone: c.timezone, plan: c.plan, mediaApproval: c.mediaApproval, category: c.category, overLimit: c.overLimit, createdAt: c.createdAt.toISOString(),
     license: c.license ? { screenLimit: c.license.screenLimit, state: c.license.state, overLimit: c.license.overLimit } : null,
     ...(counts ? { counts: { ...counts, available: Math.max(0, (c.license?.screenLimit ?? 0) - counts.screens) } } : {}),
   };
+}
+
+async function assertCategory(categoryId: string | null | undefined) {
+  if (categoryId && !(await prisma.locationCategory.count({ where: { id: categoryId } }))) throw new ValidationError("Category not found", [{ path: "body.categoryId", message: "Choose a category from the list" }], "CATEGORY_NOT_FOUND");
 }
 
 /** Customers may only read their own company; everything else is Super Admin only. */
@@ -31,6 +36,7 @@ export const companiesService = {
     if (scope.kind !== "platform") throw new ForbiddenError("Super Admin access required", "PLATFORM_ONLY");
     const where: Prisma.CompanyWhereInput = {
       ...(q.status ? { status: q.status } : {}),
+      ...(q.categoryId ? { categoryId: q.categoryId === "none" ? null : q.categoryId } : {}),
       ...(q.search ? { OR: [{ name: { contains: q.search, mode: "insensitive" } }, { code: { contains: q.search } }] } : {}),
     };
     const { skip, take } = paginate(q);
@@ -47,9 +53,10 @@ export const companiesService = {
   },
 
   async create(actor: AuthUser, body: z.infer<typeof createCompanyBody>) {
-    const { screenLimit, licenseState, ...rest } = body;
+    const { screenLimit, licenseState, categoryId, ...rest } = body;
     await assertNameFree("company", rest.name);
-    const c = await withTransaction(async (tx) => repo.create({ ...rest, code: await repo.nextCode(tx), license: { create: { screenLimit, state: licenseState } } }, tx));
+    await assertCategory(categoryId);
+    const c = await withTransaction(async (tx) => repo.create({ ...rest, ...(categoryId ? { category: { connect: { id: categoryId } } } : {}), code: await repo.nextCode(tx), license: { create: { screenLimit, state: licenseState } } }, tx));
     await logActivity({ companyId: c.id, actor, action: "company.created", resourceType: "company", resourceId: c.id, summary: `"${c.name}" onboarded with ${screenLimit} screen licenses` });
     return toDto(c, { screens: 0, online: 0, offline: 0 });
   },
@@ -58,6 +65,8 @@ export const companiesService = {
     assertCanRead(scope, id);
     if (scope.kind === "company" && body.status !== undefined) throw new ForbiddenError("Only the Super Admin can change company status", "PLATFORM_ONLY");
     if (scope.kind === "company" && body.mediaApproval !== undefined) throw new ForbiddenError("Only the Super Admin can change whether uploads need approval", "PLATFORM_ONLY");
+    if (scope.kind === "company" && body.categoryId !== undefined) throw new ForbiddenError("Only the Super Admin can change a location's category", "PLATFORM_ONLY");
+    await assertCategory(body.categoryId);
     const existing = await repo.findById(id);
     if (!existing) throw new NotFoundError("Company");
     await assertNameFree("company", body.name, { excludeId: id });

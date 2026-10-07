@@ -4,10 +4,11 @@ import { ErrorEnvelope, envelope, jsonBody, registry } from "../../core/openapi/
 import { dateTime, deepLink, id, list, notInPast, optionalField, text } from "../../core/validation/fields.js";
 
 export const idParams = z.object({ id: id() });
-export const audience = z.union([z.object({ kind: z.literal("all") }), z.object({ kind: z.literal("companies"), companyIds: z.array(z.string()).min(1) }), z.object({ kind: z.literal("users"), userIds: z.array(z.string()).min(1) })]);
-/** Request form of `audience`: ids checked, at most 1000 companies or users. */
+export const audience = z.union([z.object({ kind: z.literal("all") }), z.object({ kind: z.literal("categories"), categoryIds: z.array(z.string()).min(1) }), z.object({ kind: z.literal("companies"), companyIds: z.array(z.string()).min(1) }), z.object({ kind: z.literal("users"), userIds: z.array(z.string()).min(1) })]);
+/** Request form of `audience`: ids checked, at most 100 categories or 1000 companies or users. */
 const audienceInput = z.union([
   z.object({ kind: z.literal("all") }).strict(),
+  z.object({ kind: z.literal("categories"), categoryIds: list(id(), 100, 1) }).strict(),
   z.object({ kind: z.literal("companies"), companyIds: list(id(), 1000, 1) }).strict(),
   z.object({ kind: z.literal("users"), userIds: list(id(), 1000, 1) }).strict(),
 ]);

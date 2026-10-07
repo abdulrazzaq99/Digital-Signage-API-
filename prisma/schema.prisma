@@ -154,21 +154,32 @@ enum ActivityStatus {
 
 // ---------- Tenancy & identity ----------
 
+/// A kind of location (Kiosk, Restaurant, ...). Head Office content can be aimed at categories.
+model LocationCategory {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  companies Company[]
+}
+
 model Company {
-  id            String        @id @default(cuid())
-  code          String        @unique
+  id            String            @id @default(cuid())
+  code          String            @unique
   name          String
-  status        CompanyStatus @default(ACTIVE)
+  status        CompanyStatus     @default(ACTIVE)
   website       String?
   industry      String?
   phone         String?
-  timezone      String        @default("UTC")
+  timezone      String            @default("UTC")
   plan          String?
-  overLimit     Boolean       @default(false)
+  overLimit     Boolean           @default(false)
   /// Uploads wait for the Super Admin's approval before screens show them.
-  mediaApproval Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  mediaApproval Boolean           @default(true)
+  categoryId    String?
+  category      LocationCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   users             User[]
   license           License?
@@ -187,6 +198,7 @@ model Company {
   pairingSessions   PairingSession[]
 
   @@index([status])
+  @@index([categoryId])
 }
 
 model User {
@@ -540,6 +552,8 @@ model Template {
   orientation Orientation @default(LANDSCAPE)
   fields      Json
   isGlobal    Boolean     @default(true)
+  /// Who sees it: {"kind":"all"} | {"kind":"categories","categoryIds":[..]} | {"kind":"companies","companyIds":[..]}
+  audience    Json        @default("{\"kind\":\"all\"}")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -590,6 +604,8 @@ model Offer {
   startsAt     DateTime?
   endsAt       DateTime?
   publishedAt  DateTime?
+  /// Who sees it: {"kind":"all"} | {"kind":"categories","categoryIds":[..]} | {"kind":"companies","companyIds":[..]}
+  audience     Json        @default("{\"kind\":\"all\"}")
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -667,6 +683,8 @@ model ScratchCampaign {
   requireOffersVisit Boolean        @default(false)
   allocation         Json
   artworkKey         String?
+  /// Who sees it: {"kind":"all"} | {"kind":"categories","categoryIds":[..]} | {"kind":"companies","companyIds":[..]}
+  audience           Json           @default("{\"kind\":\"all\"}")
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 

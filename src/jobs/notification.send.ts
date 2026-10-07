@@ -4,7 +4,7 @@ import { getPushProvider } from "../core/push/index.js";
 import type { PushMessage } from "../core/push/PushProvider.js";
 import type { Notification } from "../generated/prisma/client.js";
 
-type Audience = { kind: "all" } | { kind: "companies"; companyIds: string[] } | { kind: "users"; userIds: string[] };
+type Audience = { kind: "all" } | { kind: "categories"; categoryIds: string[] } | { kind: "companies"; companyIds: string[] } | { kind: "users"; userIds: string[] };
 
 /** The app's deep link scheme (R1): dsp://offers/<id>, dsp://campaigns/<id>, dsp://notifications/<id>. */
 export function appLink(n: Pick<Notification, "id" | "type" | "targetId">): string {
@@ -18,7 +18,7 @@ export async function notificationSend(data: { notificationId: string }): Promis
   const n = await prisma.notification.findUnique({ where: { id: data.notificationId } });
   if (!n || n.sentAt) return;
   const audience = n.audience as Audience;
-  const where = audience.kind === "all" ? {} : audience.kind === "companies" ? { companyId: { in: audience.companyIds } } : { userId: { in: audience.userIds } };
+  const where = audience.kind === "all" ? {} : audience.kind === "categories" ? { company: { categoryId: { in: audience.categoryIds } } } : audience.kind === "companies" ? { companyId: { in: audience.companyIds } } : { userId: { in: audience.userIds } };
   const subs = await prisma.pushSubscription.findMany({ where, select: { externalId: true } });
   const message: PushMessage = {
     title: n.title,

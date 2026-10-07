@@ -9,8 +9,9 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from ".
 import { enqueue, JobNames } from "../../core/queue/queues.js";
 import { assertNameFree } from "../../core/validation/names.js";
 import { presignGet } from "../../core/storage/s3.js";
-import type { Template, TemplateInstance } from "../../generated/prisma/client.js";
-import { templateField, type TemplateField, type createInstanceBody, type createTemplateBody, type updateInstanceBody } from "./templates.schemas.js";
+import type { Prisma, Template, TemplateInstance } from "../../generated/prisma/client.js";
+import { assertAudienceExists, audienceOf, audienceWhere, viewerOf } from "../../core/targeting/audience.js";
+import { templateField, type TemplateField, type createInstanceBody, type createTemplateBody, type updateInstanceBody, type updateTemplateBody } from "./templates.schemas.js";
 import type { publishBody } from "../playlists/playlists.schemas.js";
 
 function fieldsOf(t: Template): TemplateField[] {
@@ -31,8 +32,8 @@ export function validateValues(fields: TemplateField[], values: Record<string, s
   return issues;
 }
 
-async function toTemplateDto(t: Template) {
-  return { id: t.id, name: t.name, category: t.category, orientation: t.orientation, fields: fieldsOf(t), isGlobal: t.isGlobal, usedIn: await prisma.templateInstance.count({ where: { templateId: t.id } }), createdAt: t.createdAt.toISOString() };
+async function toTemplateDto(t: Template, platform = true) {
+  return { id: t.id, name: t.name, category: t.category, orientation: t.orientation, fields: fieldsOf(t), isGlobal: t.isGlobal, usedIn: await prisma.templateInstance.count({ where: { templateId: t.id } }), createdAt: t.createdAt.toISOString(), ...(platform ? { audience: audienceOf(t.audience) } : {}) };
 }
 
 /** `rendered`: the output matches the current values. `rendering`: a render is queued; `outputUrl` may still be the previous output. */
@@ -56,8 +57,19 @@ async function findInstance(companyId: string, id: string) {
 }
 
 export const templatesService = {
-  async list() {
-    return Promise.all((await prisma.template.findMany({ where: { isGlobal: true }, orderBy: { name: "asc" } })).map(toTemplateDto));
+  /** The Super Admin sees every template; a location only those aimed at it. */
+  async list(scope: TenantScope) {
+    const viewer = await viewerOf(scope);
+    const where: Prisma.TemplateWhereInput = { isGlobal: true, ...(viewer ? (audienceWhere(viewer) as Prisma.TemplateWhereInput) : {}) };
+    return Promise.all((await prisma.template.findMany({ where, orderBy: { name: "asc" } })).map((t) => toTemplateDto(t, !viewer)));
+  },
+
+  async update(actor: AuthUser, id: string, body: z.infer<typeof updateTemplateBody>) {
+    if (!(await prisma.template.count({ where: { id } }))) throw new NotFoundError("Template");
+    await assertAudienceExists(body.audience);
+    const t = await prisma.template.update({ where: { id }, data: { audience: body.audience } });
+    await logActivity({ actor, action: "template.updated", resourceType: "template", resourceId: id, summary: `Template "${t.name}" audience changed` });
+    return toTemplateDto(t);
   },
 
   /** Templates are designer deliverables; only the Super Admin defines them. */
@@ -65,7 +77,8 @@ export const templatesService = {
     if (scope.kind !== "platform") throw new ForbiddenError("Only the Super Admin can define templates", "PLATFORM_ONLY");
     const keys = body.fields.map((f) => f.key);
     if (new Set(keys).size !== keys.length) throw new ValidationError("Field keys must be unique", undefined, "DUPLICATE_FIELD");
-    const t = await prisma.template.create({ data: { name: body.name, category: body.category, orientation: body.orientation, fields: body.fields, isGlobal: true } });
+    await assertAudienceExists(body.audience);
+    const t = await prisma.template.create({ data: { name: body.name, category: body.category, orientation: body.orientation, fields: body.fields, isGlobal: true, audience: body.audience } });
     await logActivity({ actor, action: "template.created", resourceType: "template", resourceId: t.id, summary: `Template "${t.name}" created` });
     return toTemplateDto(t);
   },
@@ -90,7 +103,8 @@ export const templatesService = {
 
   async createInstance(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createInstanceBody>) {
     const companyId = requireCompanyId(scope);
-    const t = await prisma.template.findUnique({ where: { id: body.templateId } });
+    const viewer = await viewerOf(scope);
+    const t = await prisma.template.findFirst({ where: { id: body.templateId, ...(viewer ? (audienceWhere(viewer) as Prisma.TemplateWhereInput) : {}) } });
     if (!t) throw new ValidationError("Template not found", undefined, "TEMPLATE_NOT_FOUND");
     const issues = validateValues(fieldsOf(t), body.values);
     if (issues.length) throw new ValidationError("Template values are invalid", issues, "TEMPLATE_VALUES_INVALID");

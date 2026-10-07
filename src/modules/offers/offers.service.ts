@@ -10,6 +10,8 @@ import { assertNameFree } from "../../core/validation/names.js";
 import { Events } from "../../core/realtime/events.js";
 import { getIo } from "../../core/realtime/server.js";
 import { presignGet } from "../../core/storage/s3.js";
+import { assertAudienceExists, audienceOf, audienceWhere, companiesIn, viewerOf, type Viewer } from "../../core/targeting/audience.js";
+import { emitToCompany } from "../../core/realtime/server.js";
 import type { Offer, Prisma } from "../../generated/prisma/client.js";
 import type { createOfferBody, listOffersQuery, updateOfferBody } from "./offers.schemas.js";
 
@@ -17,9 +19,9 @@ function requirePlatform(scope: TenantScope) {
   if (scope.kind !== "platform") throw new ForbiddenError("Only the Super Admin can manage offers", "PLATFORM_ONLY");
 }
 
-/** Customers see PUBLISHED offers inside their visibility window. */
-function visibleWhere(now = new Date()): Prisma.OfferWhereInput {
-  return { status: "PUBLISHED", AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }] };
+/** Customers see PUBLISHED offers inside their visibility window that are aimed at their location. */
+function visibleWhere(viewer: Viewer, now = new Date()): Prisma.OfferWhereInput {
+  return { status: "PUBLISHED", AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }, audienceWhere(viewer) as Prisma.OfferWhereInput] };
 }
 
 async function stats(offerId: string) {
@@ -34,31 +36,33 @@ async function stats(offerId: string) {
 async function toDto(o: Offer, withStats: boolean) {
   return {
     id: o.id, title: o.title, category: o.category, status: o.status, summary: o.summary, description: o.description, instructions: o.instructions, contact: o.contact as Record<string, string>, included: o.included, steps: o.steps,
-    imageUrl: o.imageKey ? await presignGet(o.imageKey) : null, startsAt: o.startsAt?.toISOString() ?? null, endsAt: o.endsAt?.toISOString() ?? null, publishedAt: o.publishedAt?.toISOString() ?? null, createdAt: o.createdAt.toISOString(), updatedAt: o.updatedAt.toISOString(),
+    imageUrl: o.imageKey ? await presignGet(o.imageKey) : null, ...(withStats ? { audience: audienceOf(o.audience) } : {}), startsAt: o.startsAt?.toISOString() ?? null, endsAt: o.endsAt?.toISOString() ?? null, publishedAt: o.publishedAt?.toISOString() ?? null, createdAt: o.createdAt.toISOString(), updatedAt: o.updatedAt.toISOString(),
     ...(withStats ? { stats: await stats(o.id) } : {}),
   };
 }
 
 export const offersService = {
   async list(scope: TenantScope, q: z.infer<typeof listOffersQuery>) {
-    const platform = scope.kind === "platform";
-    const where: Prisma.OfferWhereInput = { ...(platform ? (q.status ? { status: q.status } : {}) : visibleWhere()), ...(q.category ? { category: q.category } : {}), ...(q.search ? { title: { contains: q.search, mode: "insensitive" } } : {}) };
+    const viewer = await viewerOf(scope);
+    const platform = !viewer;
+    const where: Prisma.OfferWhereInput = { ...(viewer ? visibleWhere(viewer) : q.status ? { status: q.status } : {}), ...(q.category ? { category: q.category } : {}), ...(q.search ? { title: { contains: q.search, mode: "insensitive" } } : {}) };
     const { skip, take } = paginate(q);
     const [rows, total] = await Promise.all([prisma.offer.findMany({ where, orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }], skip, take }), prisma.offer.count({ where })]);
     return { data: await Promise.all(rows.map((o) => toDto(o, platform))), meta: pageMeta(q, total) };
   },
 
   async get(scope: TenantScope, id: string) {
-    const platform = scope.kind === "platform";
-    const o = await prisma.offer.findFirst({ where: { id, ...(platform ? {} : visibleWhere()) } });
+    const viewer = await viewerOf(scope);
+    const o = await prisma.offer.findFirst({ where: { id, ...(viewer ? visibleWhere(viewer) : {}) } });
     if (!o) throw new NotFoundError("Offer");
-    return toDto(o, platform);
+    return toDto(o, !viewer);
   },
 
   async create(actor: AuthUser, scope: TenantScope, body: z.infer<typeof createOfferBody>) {
     requirePlatform(scope);
     if (body.imageKey) await assertImageKey(body.imageKey, scope.companyId, "body.imageKey");
     await assertNameFree("offer", body.title);
+    await assertAudienceExists(body.audience);
     const o = await prisma.offer.create({ data: { ...body, startsAt: body.startsAt ?? null, endsAt: body.endsAt ?? null } });
     await logActivity({ actor, action: "offer.created", resourceType: "offer", resourceId: o.id, summary: `Offer "${o.title}" created as draft` });
     return toDto(o, true);
@@ -74,6 +78,7 @@ export const offersService = {
     if (startsAt && endsAt && endsAt <= startsAt) throw new ValidationError("endsAt must be after startsAt", [{ path: body.endsAt === undefined ? "body.startsAt" : "body.endsAt", message: body.endsAt === undefined ? "Must be before the end" : "Must be after the start" }], "INVALID_WINDOW");
     if (body.imageKey && body.imageKey !== existing.imageKey) await assertImageKey(body.imageKey, scope.companyId, "body.imageKey");
     await assertNameFree("offer", body.title, { excludeId: id });
+    if (body.audience) await assertAudienceExists(body.audience);
     const o = await prisma.offer.update({ where: { id }, data: body });
     await logActivity({ actor, action: "offer.updated", resourceType: "offer", resourceId: id, summary: `Offer "${o.title}" updated${existing.status === "PUBLISHED" ? " while live" : ""}` });
     return toDto(o, true);
@@ -93,14 +98,19 @@ export const offersService = {
     if (publish && existing.endsAt && existing.endsAt <= new Date()) throw new ConflictError("This offer has ended; move its end date before publishing it", "OFFER_ENDED", [{ path: "body.endsAt", message: "The end date has passed" }]);
     const o = await prisma.offer.update({ where: { id }, data: publish ? { status: "PUBLISHED", publishedAt: existing.publishedAt ?? new Date() } : { status: "UNPUBLISHED" } });
     await logActivity({ actor, action: publish ? "offer.published" : "offer.unpublished", resourceType: "offer", resourceId: id, summary: `Offer "${o.title}" ${publish ? "published to the Marketplace" : "unpublished"}` });
-    // Every `/app` socket (customers and the Super Admin) gets the event once.
-    if (publish) getIo()?.of("/app").emit(Events.offerPublished, { offerId: o.id, title: o.title });
+    // Everyone's `/app` socket gets the event once, or only the locations it is aimed at.
+    if (publish) {
+      const reach = await companiesIn(audienceOf(o.audience));
+      if (reach === "all") getIo()?.of("/app").emit(Events.offerPublished, { offerId: o.id, title: o.title });
+      else for (const companyId of reach) emitToCompany(companyId, Events.offerPublished, { offerId: o.id, title: o.title });
+    }
     return toDto(o, true);
   },
 
   /** One view per user per window (spec 11.2: repeated re-renders must not count). */
   async recordView(actor: AuthUser, scope: TenantScope, id: string) {
-    const o = await prisma.offer.findFirst({ where: { id, ...(scope.kind === "platform" ? {} : visibleWhere()) }, select: { id: true } });
+    const viewer = await viewerOf(scope);
+    const o = await prisma.offer.findFirst({ where: { id, ...(viewer ? visibleWhere(viewer) : {}) }, select: { id: true } });
     if (!o) throw new NotFoundError("Offer");
     const since = new Date(Date.now() - OFFER_VIEW_WINDOW_MIN * 60_000);
     const recent = await prisma.offerView.findFirst({ where: { offerId: id, userId: actor.id, viewedAt: { gte: since } }, select: { id: true } });

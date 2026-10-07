@@ -8,6 +8,7 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from ".
 import { paginate, pageMeta } from "../../core/http/pagination.js";
 import { assertNameFree } from "../../core/validation/names.js";
 import { presignGet } from "../../core/storage/s3.js";
+import { assertAudienceExists, audienceOf, audienceWhere, isFor, viewerOf } from "../../core/targeting/audience.js";
 import type { Prisma, ScratchCampaign, ScratchPrize } from "../../generated/prisma/client.js";
 import type { addPrizeBody, createCampaignBody, listCampaignsQuery, listWinnersQuery, updateCampaignBody } from "./campaigns.schemas.js";
 
@@ -40,13 +41,20 @@ async function toDto(c: CampaignRow, withCounts: boolean) {
   const counts = withCounts ? await Promise.all([prisma.scratchAttempt.count({ where: { campaignId: c.id } }), prisma.scratchWinner.count({ where: { attempt: { campaignId: c.id } } })]) : null;
   return {
     id: c.id, title: c.title, description: c.description, status: effectiveStatus(c), startsAt: c.startsAt.toISOString(), endsAt: c.endsAt.toISOString(), maxAttempts: c.maxAttempts, requireOffersVisit: c.requireOffersVisit,
-    artworkUrl: c.artworkKey ? await presignGet(c.artworkKey) : null,
+    artworkUrl: c.artworkKey ? await presignGet(c.artworkKey) : null, ...(withCounts ? { audience: audienceOf(c.audience) } : {}),
     prizes: c.prizes.map((p) => ({ id: p.id, name: p.name, value: p.value, quantity: p.quantity, remaining: p.remaining, awarded: p.quantity - p.remaining })),
     ...(counts ? { attempts: counts[0], winners: counts[1] } : {}), createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString(),
   };
 }
 
 const include = { prizes: { orderBy: { createdAt: "asc" as const } } };
+
+/** A campaign aimed at other locations behaves as if it did not exist for this user. */
+async function assertPlayable(c: ScratchCampaign, companyId: string | null, db: Tx | typeof prisma = prisma) {
+  if (!companyId) return;
+  const company = await db.company.findUnique({ where: { id: companyId }, select: { categoryId: true } });
+  if (!isFor(audienceOf(c.audience), { companyId, categoryId: company?.categoryId ?? null })) throw new NotFoundError("Campaign");
+}
 
 async function findCampaign(id: string): Promise<CampaignRow> {
   const c = await prisma.scratchCampaign.findUnique({ where: { id }, include });
@@ -69,9 +77,10 @@ function draw(alloc: Allocation, availablePrizeIds: Set<string>, random = Math.r
 
 export const campaignsService = {
   async list(scope: TenantScope, q: z.infer<typeof listCampaignsQuery>) {
-    const platform = scope.kind === "platform";
+    const viewer = await viewerOf(scope);
+    const platform = !viewer;
     const now = new Date();
-    const where: Prisma.ScratchCampaignWhereInput = platform ? { ...statusWhere(q.status, now), ...(q.search ? { title: { contains: q.search, mode: "insensitive" } } : {}) } : { status: "ACTIVE", startsAt: { lte: now }, endsAt: { gte: now } };
+    const where: Prisma.ScratchCampaignWhereInput = !viewer ? { ...statusWhere(q.status, now), ...(q.search ? { title: { contains: q.search, mode: "insensitive" } } : {}) } : { AND: [{ status: "ACTIVE", startsAt: { lte: now }, endsAt: { gte: now } }, audienceWhere(viewer) as Prisma.ScratchCampaignWhereInput] };
     const { skip, take } = paginate(q);
     const [rows, total] = await Promise.all([prisma.scratchCampaign.findMany({ where, include, orderBy: { startsAt: "desc" }, skip, take }), prisma.scratchCampaign.count({ where })]);
     return { data: await Promise.all(rows.map((c) => toDto(c, platform))), meta: pageMeta(q, total) };
@@ -80,6 +89,7 @@ export const campaignsService = {
   async get(scope: TenantScope, id: string) {
     const c = await findCampaign(id);
     if (scope.kind !== "platform" && effectiveStatus(c) !== "ACTIVE") throw new NotFoundError("Campaign");
+    if (scope.kind !== "platform") await assertPlayable(c, scope.companyId);
     return toDto(c, scope.kind === "platform");
   },
 
@@ -87,8 +97,9 @@ export const campaignsService = {
     requirePlatform(scope);
     if (body.artworkKey) await assertImageKey(body.artworkKey, scope.companyId, "body.artworkKey");
     await assertNameFree("campaign", body.title);
+    await assertAudienceExists(body.audience);
     const c = await withTransaction(async (tx) => {
-      const created = await tx.scratchCampaign.create({ data: { title: body.title, description: body.description, status: body.activate ? "ACTIVE" : "DRAFT", startsAt: new Date(body.startsAt), endsAt: new Date(body.endsAt), maxAttempts: body.maxAttempts, requireOffersVisit: body.requireOffersVisit, artworkKey: body.artworkKey, allocation: { loseWeight: body.loseWeight, prizes: [] }, prizes: { create: body.prizes.map((p) => ({ name: p.name, value: p.value, quantity: p.quantity, remaining: p.quantity })) } }, include });
+      const created = await tx.scratchCampaign.create({ data: { audience: body.audience, title: body.title, description: body.description, status: body.activate ? "ACTIVE" : "DRAFT", startsAt: new Date(body.startsAt), endsAt: new Date(body.endsAt), maxAttempts: body.maxAttempts, requireOffersVisit: body.requireOffersVisit, artworkKey: body.artworkKey, allocation: { loseWeight: body.loseWeight, prizes: [] }, prizes: { create: body.prizes.map((p) => ({ name: p.name, value: p.value, quantity: p.quantity, remaining: p.quantity })) } }, include });
       const allocation: Allocation = { loseWeight: body.loseWeight, prizes: created.prizes.map((p, i) => ({ prizeId: p.id, weight: body.prizes[i]!.weight })) };
       return tx.scratchCampaign.update({ where: { id: created.id }, data: { allocation: allocation as unknown as Prisma.InputJsonValue }, include });
     });
@@ -101,6 +112,7 @@ export const campaignsService = {
     const existing = await findCampaign(id);
     if (body.artworkKey && body.artworkKey !== existing.artworkKey) await assertImageKey(body.artworkKey, scope.companyId, "body.artworkKey");
     await assertNameFree("campaign", body.title, { excludeId: id });
+    if (body.audience) await assertAudienceExists(body.audience);
     const startsAt = body.startsAt ? new Date(body.startsAt) : existing.startsAt;
     const endsAt = body.endsAt ? new Date(body.endsAt) : existing.endsAt;
     if (endsAt <= startsAt) throw new ValidationError("endsAt must be after startsAt", undefined, "INVALID_WINDOW");
@@ -111,7 +123,7 @@ export const campaignsService = {
       maxAttempts: body.maxAttempts !== undefined && body.maxAttempts !== existing.maxAttempts,
       loseWeight: body.loseWeight !== undefined && body.loseWeight !== allocation.loseWeight,
     });
-    const c = await prisma.scratchCampaign.update({ where: { id }, data: { title: body.title, description: body.description, startsAt, endsAt, maxAttempts: body.maxAttempts, requireOffersVisit: body.requireOffersVisit, artworkKey: body.artworkKey, ...(body.loseWeight !== undefined ? { allocation: { ...allocation, loseWeight: body.loseWeight } as unknown as Prisma.InputJsonValue } : {}) }, include });
+    const c = await prisma.scratchCampaign.update({ where: { id }, data: { audience: body.audience, title: body.title, description: body.description, startsAt, endsAt, maxAttempts: body.maxAttempts, requireOffersVisit: body.requireOffersVisit, artworkKey: body.artworkKey, ...(body.loseWeight !== undefined ? { allocation: { ...allocation, loseWeight: body.loseWeight } as unknown as Prisma.InputJsonValue } : {}) }, include });
     await logActivity({ actor, action: "campaign.updated", resourceType: "campaign", resourceId: id, summary: `Campaign "${c.title}" updated`, meta: { fields: Object.keys(body) } });
     return toDto(c, true);
   },
@@ -156,6 +168,7 @@ export const campaignsService = {
 
   async eligibility(actor: AuthUser, id: string) {
     const c = await findCampaign(id);
+    await assertPlayable(c, actor.companyId);
     const attempts = await prisma.scratchAttempt.findMany({ where: { campaignId: id, userId: actor.id }, orderBy: { createdAt: "desc" }, include: { prize: true, winner: { select: { redemption: true } } } });
     const attemptsUsed = attempts.length;
     const reason = await eligibilityReason(c, actor, attemptsUsed);
@@ -185,6 +198,7 @@ export const campaignsService = {
       const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "ScratchCampaign" WHERE "id" = ${id} FOR UPDATE`;
       if (!rows.length) throw new NotFoundError("Campaign");
       const c = await tx.scratchCampaign.findUnique({ where: { id }, include });
+      await assertPlayable(c!, actor.companyId, tx);
       const attemptsUsed = await tx.scratchAttempt.count({ where: { campaignId: id, userId: actor.id } });
       const reason = await eligibilityReason(c!, actor, attemptsUsed, tx);
       if (reason) throw reason === "ATTEMPTS_EXHAUSTED" ? new ConflictError("All attempts have been used", "ATTEMPTS_EXHAUSTED") : reason === "OFFERS_VISIT_REQUIRED" ? new ForbiddenError("View an offer in the Marketplace before scratching", "OFFERS_VISIT_REQUIRED") : new ConflictError("Campaign is not active", "CAMPAIGN_INACTIVE");

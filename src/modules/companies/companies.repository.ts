@@ -2,7 +2,7 @@ import { prisma } from "../../core/db/prisma.js";
 import type { Tx } from "../../core/db/transaction.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 
-const include = { license: { select: { screenLimit: true, state: true, overLimit: true } } } satisfies Prisma.CompanyInclude;
+const include = { license: { select: { screenLimit: true, state: true, overLimit: true } }, category: { select: { id: true, name: true } } } satisfies Prisma.CompanyInclude;
 
 /** Arbitrary constant for pg_advisory_xact_lock: serialises company-code allocation. */
 const COMPANY_CODE_LOCK = 0x636f6465;
