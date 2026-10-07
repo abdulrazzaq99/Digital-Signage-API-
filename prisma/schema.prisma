@@ -809,3 +809,36 @@ model IdempotencyKey {
   @@unique([key, userId])
   @@index([createdAt])
 }
+
+// ---------- Head Office push ----------
+
+/// A picture, video or ready-made template Head Office sends straight to locations' screens. While
+/// live it plays at the end of each loop of the screen's own content.
+model Broadcast {
+  id          String    @id @default(cuid())
+  title       String
+  /// UPLOAD (Head Office's file) or TEMPLATE (rendered from a template with Head Office's values).
+  source      String
+  templateId  String?
+  fileKey     String
+  mimeType    String
+  type        MediaType
+  sizeBytes   Int
+  checksum    String?
+  width       Int?
+  height      Int?
+  /// Seconds it stays on screen each time (a video's length for videos).
+  displaySec  Int
+  audience    Json      @default("{\"kind\":\"all\"}")
+  startsAt    DateTime  @default(now())
+  endsAt      DateTime?
+  /// Paused pushes are off screens until resumed.
+  active      Boolean   @default(true)
+  /// Whether screens were last told to play it; the sweep compares this with the dates.
+  liveNow     Boolean   @default(false)
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([active, startsAt, endsAt])
+}

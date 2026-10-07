@@ -16,6 +16,7 @@ async function contentUsing(categoryId: string): Promise<string[]> {
     SELECT 'offer' AS kind, COUNT(*)::int AS n FROM "Offer" WHERE "audience"->'categoryIds' ? ${categoryId}
     UNION ALL SELECT 'template', COUNT(*)::int FROM "Template" WHERE "audience"->'categoryIds' ? ${categoryId}
     UNION ALL SELECT 'campaign', COUNT(*)::int FROM "ScratchCampaign" WHERE "audience"->'categoryIds' ? ${categoryId}
+    UNION ALL SELECT 'pushed item', COUNT(*)::int FROM "Broadcast" WHERE "audience"->'categoryIds' ? ${categoryId}
     UNION ALL SELECT 'scheduled notification', COUNT(*)::int FROM "Notification" WHERE "sentAt" IS NULL AND "audience"->'categoryIds' ? ${categoryId}`;
   return rows.filter((r) => r.n > 0).map((r) => `${r.n} ${r.kind}${r.n > 1 ? "s" : ""}`);
 }

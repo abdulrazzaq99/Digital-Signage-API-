@@ -12,6 +12,7 @@ import { offerExpirySweep } from "./jobs/offer.expiry.js";
 import { presenceSweep } from "./jobs/presence.sweep.js";
 import { onJobFailed, processJob } from "./jobs/registry.js";
 import { createSweep } from "./jobs/sweep.js";
+import { broadcastWindowSweep } from "./modules/broadcasts/broadcasts.service.js";
 
 /** BullMQ worker bootstrap: queued jobs (validated per job type) plus the periodic sweeps. */
 logger.info({ env: env.NODE_ENV }, "Worker starting");
@@ -27,6 +28,8 @@ const sweeps = [
   createSweep("media-cleanup", mediaCleanup, MEDIA_CLEANUP_INTERVAL_MS),
   createSweep("licence-expiry", licenseExpirySweep, EXPIRY_SWEEP_INTERVAL_MS),
   createSweep("offer-expiry", offerExpirySweep, EXPIRY_SWEEP_INTERVAL_MS),
+  // Head Office pushes start and stop on time.
+  createSweep("broadcast-windows", broadcastWindowSweep, 30_000),
 ];
 for (const s of sweeps) s.start();
 

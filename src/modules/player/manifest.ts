@@ -4,6 +4,7 @@ import type { Tx } from "../../core/db/transaction.js";
 import { NotFoundError } from "../../core/errors/AppError.js";
 import { presignGet } from "../../core/storage/s3.js";
 import type { AssignmentKind } from "../../generated/prisma/enums.js";
+import { broadcastsService } from "../broadcasts/broadcasts.service.js";
 
 /** A file the player downloads once and plays by ID. */
 interface FileRef {
@@ -159,6 +160,14 @@ export async function buildManifest(screenId: string) {
   );
 
   const { screen } = data;
+  // Head Office pushes play at the end of each loop of the screen's own content (not on canvas walls).
+  const category = await prisma.company.findUnique({ where: { id: screen.companyId }, select: { categoryId: true } });
+  const pushes = data.canvas ? [] : await broadcastsService.liveFor(screen.companyId, category?.categoryId ?? null);
+  const withPushes = (items: Item[]) => [...items, ...pushes.map((b, i) => ({ assetId: b.id, position: items.length + i, durationSec: b.displaySec }))];
+  const pushAssets = await Promise.all(pushes.map(async (b) => ({ id: b.id, type: b.type, mimeType: b.mimeType, url: await presignGet(b.fileKey), checksum: b.checksum, sizeBytes: b.sizeBytes, width: b.width, height: b.height, durationSec: b.type === "VIDEO" ? b.displaySec : null, sourceAssetId: null, page: null })));
+  const layout = data.content?.layout ?? null;
+  // In a layout, they go to the biggest zone.
+  const mainZone = layout?.zones.reduce<Zone | null>((best, z) => (!best || z.w * z.h > best.w * best.h ? z : best), null);
   const assets = await Promise.all(
     [...files.values()].map(async (f) => ({ id: f.id, type: f.type, mimeType: f.mimeType, url: await presignGet(f.storageKey), checksum: f.checksum, sizeBytes: Number(f.sizeBytes), width: f.width, height: f.height, durationSec: f.durationSec, sourceAssetId: f.sourceAssetId ?? null, page: f.page ?? null })),
   );
@@ -166,10 +175,10 @@ export async function buildManifest(screenId: string) {
     version: screen.manifestVersion, screenId: screen.id, companyId: screen.companyId, orientation: screen.orientation, generatedAt: new Date().toISOString(),
     activateAt: screen.assignment?.activateAt?.toISOString() ?? null,
     assignment: data.assignment,
-    items: data.content?.items ?? [],
-    layout: data.content?.layout ?? null,
+    items: layout ? (data.content?.items ?? []) : withPushes(data.content?.items ?? []),
+    layout: layout && pushes.length ? { ...layout, zones: layout.zones.map((z) => (z === mainZone ? { ...z, items: withPushes(z.items) } : z)) } : layout,
     canvas: data.canvas,
-    schedule: data.schedule,
-    assets,
+    schedule: pushes.length ? data.schedule.map((s) => ({ ...s, items: withPushes(s.items) })) : data.schedule,
+    assets: [...assets, ...pushAssets],
   };
 }
