@@ -1,4 +1,6 @@
 import { z } from "zod";
+// Loads the .openapi() extension on zod before the schemas below use it.
+import "../openapi/registry.js";
 import { prisma } from "../db/prisma.js";
 import type { TenantScope } from "../auth/scope.js";
 import { ValidationError } from "../errors/AppError.js";
