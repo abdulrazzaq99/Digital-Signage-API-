@@ -219,7 +219,7 @@ const GROUPS = [
     { t: "The address is secure", url: "/login", steps: ["Look at the address bar.", "Open http://addifytv.nu (with http, not https)."], exp: "A padlock shows. The http address switches to https by itself." },
   ]},
   { title: "B. Overview", spec: "Spec 14.2 Overview", cases: [
-    { t: "Overview shows your own numbers", url: "/portal", steps: ["Open Overview."], exp: "You see your company name, \"x of y screen licences used\", and counts for Total, Online and Offline screens. Only your company's screens are counted." },
+    { t: "Overview shows your own numbers", url: "/portal", steps: ["Sign in as your company user, not the Super Admin (the Super Admin has a different Overview, for all companies).", "Open Overview."], exp: "You see your company name, \"x of y screen licences used\", and counts for Total, Online and Offline screens. Only your company's screens are counted." },
     { t: "Empty state when nothing is paired", url: "/portal", steps: ["With no screens paired, read the Screen Status box.", "Click \"Pair your first screen\"."], exp: "It says \"No screens paired yet\" and the link opens the pairing page." },
     { t: "Recent activity", url: "/portal", steps: ["Do something (upload a file or rename a playlist).", "Come back to Overview."], exp: "Your action appears at the top of Recent Activity with the time." },
     { t: "Quick publish", url: "/portal", need: ["player"], steps: ["In Quick Publish pick a screen, then a playlist, then confirm."], exp: "It finishes with a published message. The screen now shows that playlist as its content." },
@@ -258,7 +258,7 @@ const GROUPS = [
     { t: "File details", url: "/portal/media", steps: ["Click a file to open its details."], exp: "You see a preview, type, size, dimensions or length, who uploaded it, tags, and where it is used." },
     { t: "Rename a file", url: "/portal/media", steps: ["Rename a file.", "Try to save an empty name."], exp: "The new name is saved. An empty name is refused." },
     { t: "Delete an unused file", url: "/portal/media", steps: ["Delete a file that is not in any playlist. Confirm."], exp: "The file disappears and the Total goes down by one." },
-    { t: "A file in use is protected", url: "/portal/media", steps: ["Put a file in a playlist (see F2).", "Try to delete that file."], exp: "You are told it is in use and where. It is not silently removed from the playlist." },
+    { t: "A file in use is protected", url: "/portal/media", steps: ["Put a file in a playlist (see F2).", "Try to delete that file."], exp: "You are told it is in use and where, and must confirm \"Delete & remove from playlists\" first. Only after you confirm is it deleted and taken out of the playlist (that is correct)." },
   ]},
   { title: "F. Playlists", spec: "Spec 6.2 Playlists", cases: [
     { t: "Create a playlist", url: "/portal/playlists", steps: ["Click Create Playlist, type a name, confirm."], exp: "The editor opens with an empty timeline and your media on the left." },
@@ -276,7 +276,7 @@ const GROUPS = [
   ]},
   { title: "G. Publishing to screens", spec: "Spec 6.2 Publish, 7.1 Real-time", cases: [
     { t: "Publish to one screen", url: "/portal/playlists", need: ["player"], steps: ["Open a playlist, click Publish.", "Choose Publish Now, pick one screen, Review, confirm."], exp: "\"Published!\" is shown. If the screen is off it says Pending (it will sync when it reconnects). If it is on it says Syncing." },
-    { t: "Publish to several screens", url: "/portal/playlists", need: ["player"], steps: ["Publish a playlist and tick two or more screens."], exp: "All chosen screens are listed in the summary and each gets the playlist." },
+    { t: "Publish to several screens", url: "/portal/playlists", need: ["player"], steps: ["Pair a second screen first if you have one only: use the second Pretend screen box above test C1 (or Add another screen there).", "Publish a playlist and tick two or more screens."], exp: "All chosen screens are listed in the summary and each gets the playlist." },
     { t: "Publish to a group", url: "/portal/playlists", need: ["player"], steps: ["Publish a playlist and choose a screen group."], exp: "Every screen in the group gets the playlist." },
     { t: "The screen receives it", url: "/portal/screens", need: ["player"], steps: ["After publishing, look at the real screen (or the Pretend screen box; click Check for new content to skip the wait).", "Open the screen in the portal."], exp: "The screen plays the playlist, item by item, for the seconds you set. The portal shows the content as Synced." },
     { t: "Publish from a screen's page", url: "/portal/screens", need: ["player"], steps: ["Open a screen, click Publish Content, choose a playlist, confirm."], exp: "The screen's Current Assignment changes to that playlist." },
@@ -322,7 +322,7 @@ const GROUPS = [
     { t: "Play", url: "/portal/scratch-win", need: ["sa"], steps: ["Click Play Now and scratch the card."], exp: "It shows either a prize or \"no prize this time\". Your tries go down by one." },
     { t: "No double prize", url: "/portal/scratch-win", need: ["sa"], steps: ["Click Play Now twice very quickly, or reload the page while it is revealing."], exp: "Only one result is given. You do not lose two tries or win twice." },
     { t: "Tries run out", url: "/portal/scratch-win", need: ["sa"], steps: ["Play until your tries are used."], exp: "Play is disabled with a message that all attempts are used." },
-    { t: "Winner is recorded", url: "/portal/scratch-win", need: ["sa"], steps: ["After a win, Super Admin opens the campaign's winners."], exp: "Your win is listed with the prize and time. The prize's remaining quantity went down by one and never goes below zero." },
+    { t: "Winner is recorded", url: "/portal/scratch-win", need: ["sa"], steps: ["Super Admin creates a test campaign with Lose weight 0, so every scratch wins.", "Scratch it once as the company user.", "Super Admin opens that campaign's winners."], exp: "Your win is listed with the prize and time. The prize's remaining quantity went down by one and never goes below zero." },
     { t: "Campaign ends", url: "/portal/scratch-win", need: ["sa"], steps: ["Super Admin deactivates the campaign.", "Reload Scratch & Win."], exp: "The campaign can no longer be played." },
   ]},
   { title: "M. Account and users", spec: "Spec 14.2 Account, 4.1 Accounts", cases: [
@@ -353,7 +353,7 @@ const GROUPS = [
   ]},
   { title: "P. Loading, empty and error states", spec: "Spec 16.3 Mandatory states", cases: [
     { t: "Loading", url: "/portal/media", steps: ["Reload a page with a lot of content."], exp: "Grey placeholder shapes show briefly, then the content. No flash of \"empty\"." },
-    { t: "Lost connection", url: "/portal/screens", steps: ["Turn off your internet and reload, or click something."], exp: "A clear message says it could not load, with a Try again button. The page is not blank." },
+    { t: "Lost connection", url: "/portal/screens", steps: ["Open the Screens page, then turn off your internet.", "Click another page in the menu. Do not reload the browser: a reload while offline shows the browser's own offline page, which the site can't control."], exp: "A clear message says it could not load, with a Try again button. The page is not blank." },
     { t: "Page that does not exist", url: "/portal/nothing-here", steps: ["Open this address."], exp: "A \"Page not found\" page with a link back." },
     { t: "Item that does not exist", url: "/portal/screens/cmissing0000000000000000a", steps: ["Open this address."], exp: "A message says the item could not be found. The menu still works." },
     { t: "Session ends", url: "/portal", steps: ["Stay signed in on two browsers. Change your password in one.", "Click something in the other."], exp: "The other browser is sent to the login page instead of showing errors." },
