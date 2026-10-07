@@ -133,6 +133,7 @@
       <tr><td>Test files</td><td>One JPG, one PNG, one short MP4 video, one PDF with 2 or more pages, and one file that is not allowed (for example a <code>.txt</code> or <code>.zip</code>).</td></tr>
       <tr><td>A screen</td><td>A real Android player, or the <a href="#player">Pretend screen boxes</a> beside test C1 (tests marked <span class="need">Needs a screen</span>).</td></tr>
       <tr><td>A second email inbox</td><td>To receive an invitation and a password-reset email.</td></tr>
+      <tr><td>A second company</td><td>For tests R–U marked <span class="need">Needs a second company</span>: a second test company in the other category (one Restaurant, one Kiosk), with its own login. The Super Admin creates it and sets both categories (test S2).</td></tr>
     </table>
   </section>
 
@@ -197,7 +198,7 @@ $api = "https://api.addifytv.nu/api/v1/player"</code></pre>
     </details>
   </section>
 
-  <p class="card" id="lockednote">The test cases are hidden until you sign in. <a href="#gate">Go to the top</a>, enter your name and the access code, and press <b>Start</b>. All 125 tests then appear here.</p>
+  <p class="card" id="lockednote">The test cases are hidden until you sign in. <a href="#gate">Go to the top</a>, enter your name and the access code, and press <b>Start</b>. All the tests then appear here.</p>
   <div id="cases"></div>
 </main>
 
@@ -363,6 +364,41 @@ const GROUPS = [
     { t: "Open on a phone", url: "/portal", steps: ["Open the portal on a phone (or make the browser window narrow).", "Tap the menu button (top left)."], exp: "The menu slides in. Pages fit the screen with no sideways scrolling." },
     { t: "Forms on a phone", url: "/portal/screens/pair", steps: ["Tap into text boxes and fill a form."], exp: "The page does not zoom in when you tap a box. Buttons are big enough to tap. Pop-up windows open from the bottom." },
     { t: "Logo goes home", url: "/portal/account", steps: ["Click \"SignageHub\" at the top of the menu."], exp: "You go to the Overview page." },
+  ]},  { title: "R. Upload approval", spec: "New: Super Admin approves company uploads", cases: [
+    { t: "A new upload waits for approval", url: "/portal/media", steps: ["Upload a JPG or PNG.", "Look at the message after uploading and at the file in Media."], exp: "The message says it shows on screens once approved. The file has a \"Waiting for approval\" label and the \"Waiting for approval\" count went up by one." },
+    { t: "A waiting file is not shown on screens", url: "/portal/playlists", need: ["player"], steps: ["Add the waiting file to a playlist that is on a screen. Save.", "Look at the screen (or the Pretend screen box above C1)."], exp: "You can add and save it, but the screen does not show it yet. The rest of the playlist keeps playing." },
+    { t: "Super Admin sees it in Approvals", url: "/approvals", need: ["sa"], steps: ["Super Admin opens Approvals (left menu)."], exp: "Your file is under Waiting with your company name, who uploaded it and when. The count on the Waiting tab matches." },
+    { t: "Approve a file", url: "/approvals", need: ["sa", "player"], steps: ["Super Admin clicks Approve on your file.", "Look at the file in your Media and at the screen."], exp: "The label is gone. Within about a minute the screen starts showing the file without anyone publishing again. You get a notification and an email saying it was approved." },
+    { t: "Turn a file down", url: "/approvals", need: ["sa", "mail"], steps: ["Upload another file.", "Super Admin clicks Don't approve, first with no reason, then with a reason."], exp: "Without a reason it is refused (a reason is required). With a reason your file shows \"Not approved\" and the reason in its details, and you get an email with the reason." },
+    { t: "Withdraw an approval", url: "/approvals", need: ["sa", "player"], steps: ["Super Admin opens the Approved tab and clicks Withdraw approval on a file that is on a screen, with a reason."], exp: "The file leaves the screen within about a minute and shows \"Not approved\" with the reason." },
+    { t: "Approval can be switched off", url: "/companies", need: ["sa"], steps: ["Super Admin opens your company, clicks Edit and unticks \"Uploads need my approval\". Save.", "Upload a file."], exp: "The company page says \"No approval needed\". The new file has no waiting label and can be shown straight away." },
+  ]},
+  { title: "S. Kiosk and Restaurant categories", spec: "New: who sees Head Office content", cases: [
+    { t: "Manage categories", url: "/settings?tab=categories", need: ["sa"], steps: ["Super Admin opens Settings, Location categories.", "Add \"Bar\". Try to add \"bar\" again. Rename Bar to \"Bars\".", "Try to delete Kiosk while a company uses it, then delete Bars."], exp: "Bar is added and renamed. The second \"bar\" is refused as a duplicate. Kiosk can't be deleted while used and the message says why. Bars is deleted." },
+    { t: "Give a company a category", url: "/companies", need: ["sa"], steps: ["Super Admin edits your company and sets Location Category to Restaurant. Save.", "In the Companies list, filter by Restaurant."], exp: "The company page and list show Restaurant. The filter shows only Restaurant companies." },
+    { t: "Only the Super Admin can change the category", url: "/portal/account", steps: ["As the company user, look for a way to change your company's category."], exp: "There is none. The category is set by the Super Admin only." },
+    { t: "Offer for Restaurants only", url: "/offers/new", need: ["sa", "loc2"], steps: ["Super Admin creates an offer, chooses Who sees it: By category, Restaurant, and publishes it.", "Open Offers as the Restaurant company, then as the Kiosk company."], exp: "The Restaurant company sees the offer. The Kiosk company does not see it, and opening its link shows Not found." },
+    { t: "Offer for chosen locations", url: "/offers/new", need: ["sa", "loc2"], steps: ["Super Admin publishes an offer for Chosen locations, ticking only the Kiosk company."], exp: "Only that company sees it. The offers list shows who each offer is for (e.g. \"Restaurant only\")." },
+    { t: "Template for one category", url: "/layouts", need: ["sa", "loc2"], steps: ["Super Admin opens a template, clicks Change next to \"Who can use it\" and picks Restaurant only.", "Open Layouts / Templates, Templates tab, as each company."], exp: "Only the Restaurant company sees the template and can use it." },
+    { t: "Scratch & Win for one category", url: "/scratch-win/new", need: ["sa", "loc2"], steps: ["Super Admin creates and activates a campaign with Who can play: Kiosk only.", "Open Scratch & Win as each company."], exp: "Only the Kiosk company sees and can play the campaign." },
+    { t: "Notification to a category", url: "/notifications", need: ["sa", "loc2"], steps: ["Super Admin sends a notification with Send to: By category, Restaurant."], exp: "The Restaurant company gets it. The Kiosk company does not. The notifications list says \"Restaurant only\"." },
+    { t: "No category yet", url: "/portal/offers", need: ["sa"], steps: ["Super Admin sets your company back to No category."], exp: "You still see content for All locations, but not content aimed at a category." },
+  ]},
+  { title: "T. Head Office templates", spec: "New: Head Office sets parts, locations fill the rest", cases: [
+    { t: "Build a template with fixed parts", url: "/layouts", need: ["sa"], steps: ["Super Admin creates a template with three fields: Headline, Product picture (image), Price.", "On Headline tick \"Set by Head Office\" and type \"Extra Gum\". On the picture tick it and upload a picture. On Price leave it unticked and type the suggestion \"10 kr\".", "Try to save with a ticked field left empty, then fill it and create."], exp: "An empty ticked field is refused with a clear message. After creating, the template page lists Price under \"Locations fill in\" and Headline and the picture under \"Set by Head Office\"." },
+    { t: "Location fills only its part", url: "/portal/layouts", need: ["sa"], steps: ["As the company user, open the template (Templates tab)."], exp: "Headline and picture show in a \"Set by Head Office\" box and can't be changed. Only Price can be typed in, with \"10 kr\" shown as the suggestion." },
+    { t: "Generate and publish it", url: "/portal/layouts", need: ["sa", "player"], steps: ["Type your own price, e.g. \"12 kr\". Click Generate Output, then Publish to a screen."], exp: "The finished picture has Head Office's headline and picture with your price. The screen shows it." },
+    { t: "Leave the price blank", url: "/portal/layouts", need: ["sa"], steps: ["Use the same template again, leave Price empty and generate."], exp: "It is accepted and the picture uses Head Office's \"10 kr\"." },
+  ]},
+  { title: "U. Push to Screens", spec: "New: Head Office sends content straight to screens", cases: [
+    { t: "Push a picture to a category", url: "/push", need: ["sa", "player"], steps: ["Super Admin opens Push to Screens, clicks New push, gives it a title, uploads a picture, chooses By category, Restaurant, and clicks Push to screens.", "Look at a Restaurant company's screen (or Pretend screen box)."], exp: "The push shows \"On screens now\" with the number of screens. Within about a minute the picture plays after the location's own content, for the seconds set." },
+    { t: "Other locations don't get it", url: "/push", need: ["sa", "player", "loc2"], steps: ["Look at a Kiosk company's screen."], exp: "The pushed picture does not play there." },
+    { t: "Pause and resume", url: "/push", need: ["sa", "player"], steps: ["Super Admin clicks Pause, waits a minute, then Resume."], exp: "Paused: it shows \"Paused\" and leaves the screens. Resumed: it plays again." },
+    { t: "Push a video", url: "/push", need: ["sa", "player"], steps: ["Push a short MP4 video."], exp: "It is accepted, shows \"video, N s\" with its length, and plays to the end on the screens." },
+    { t: "Push a template", url: "/push", need: ["sa", "player"], steps: ["New push, choose A template, pick the Head Office template from section T.", "Also try a template whose required field has no Head Office value."], exp: "The first is pushed as a picture with Head Office's values. The second is refused and the message names the field that needs a value." },
+    { t: "Start and end times", url: "/push", need: ["sa", "player"], steps: ["Push with Start 3 minutes from now and End 6 minutes from now. Watch the screen."], exp: "It shows \"Scheduled\", starts playing about 3 minutes later and stops about 3 minutes after that, then shows \"Ended\", without anyone pressing anything." },
+    { t: "Edit and delete", url: "/push", need: ["sa", "player"], steps: ["Edit a live push: change the seconds and the locations. Then delete it."], exp: "Changes apply to the screens within about a minute. After delete it is gone from the list and from the screens." },
+    { t: "Wrong input is refused", url: "/push", need: ["sa"], steps: ["Try to push without a title, without a file, with 2 seconds, and with an End before the Start."], exp: "Each is refused with a clear message next to the field. Nothing is pushed." },
   ]},
 ];
 
@@ -370,7 +406,7 @@ const API = "/qa/api/results";
 const state = {};                       // id -> { r, n, by, at }
 let me = localStorage.getItem("qa-name") || "";
 let code = localStorage.getItem("qa-code") || "";
-const NEED = { sa: "Needs Super Admin", player: "Needs a screen", mail: "Needs a second inbox" };
+const NEED = { sa: "Needs Super Admin", player: "Needs a screen", mail: "Needs a second inbox", loc2: "Needs a second company" };
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const sync = document.getElementById("sync");
