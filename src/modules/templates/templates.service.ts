@@ -8,23 +8,35 @@ import { prisma } from "../../core/db/prisma.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../core/errors/AppError.js";
 import { enqueue, JobNames } from "../../core/queue/queues.js";
 import { assertNameFree } from "../../core/validation/names.js";
-import { presignGet } from "../../core/storage/s3.js";
+import { nanoid } from "nanoid";
+import { deleteObject, headObject, presignGet, presignPut } from "../../core/storage/s3.js";
 import type { Prisma, Template, TemplateInstance } from "../../generated/prisma/client.js";
 import { assertAudienceExists, audienceOf, audienceWhere, viewerOf } from "../../core/targeting/audience.js";
-import { templateField, type TemplateField, type createInstanceBody, type createTemplateBody, type updateInstanceBody, type updateTemplateBody } from "./templates.schemas.js";
+import { HQ_IMAGE_PREFIX, templateField, type TemplateField, type templateImageUploadBody, type createInstanceBody, type createTemplateBody, type updateInstanceBody, type updateTemplateBody } from "./templates.schemas.js";
 import type { publishBody } from "../playlists/playlists.schemas.js";
 
 function fieldsOf(t: Template): TemplateField[] {
   return (t.fields as unknown[]).map((f) => templateField.parse(f));
 }
 
-/** Enforces the template's field constraints: unknown keys rejected, required present, max length. */
+/**
+ * What the template shows: Head Office's value for a locked field, otherwise the location's own
+ * value, falling back to Head Office's default when the location left it blank.
+ */
+export function effectiveValues(fields: TemplateField[], values: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(fields.map((f) => [f.key, f.locked ? (f.default ?? "") : values[f.key]?.trim() ? values[f.key]! : (f.default ?? "")]).filter(([, v]) => v !== ""));
+}
+
+/** Enforces the template's field constraints: unknown or Head Office keys rejected, required present, max length. */
 export function validateValues(fields: TemplateField[], values: Record<string, string>): { path: string; message: string }[] {
   const issues: { path: string; message: string }[] = [];
-  const known = new Set(fields.map((f) => f.key));
-  for (const key of Object.keys(values)) if (!known.has(key)) issues.push({ path: key, message: "Field is not editable in this template" });
-  for (const f of fields) {
-    const v = values[f.key]?.trim() ?? "";
+  const editable = new Set(fields.filter((f) => !f.locked).map((f) => f.key));
+  const locked = new Set(fields.filter((f) => f.locked).map((f) => f.key));
+  for (const key of Object.keys(values)) if (locked.has(key)) issues.push({ path: key, message: "Set by Head Office and can't be changed" });
+  else if (!editable.has(key)) issues.push({ path: key, message: "Field is not editable in this template" });
+  const merged = effectiveValues(fields, values);
+  for (const f of fields.filter((x) => !x.locked)) {
+    const v = merged[f.key]?.trim() ?? "";
     if (f.required && !v) issues.push({ path: f.key, message: `${f.label} is required` });
     if (f.max && v.length > f.max) issues.push({ path: f.key, message: `${f.label} must be at most ${f.max} characters` });
     if (f.type === "color" && v && !/^#[0-9a-fA-F]{6}$/.test(v)) issues.push({ path: f.key, message: `${f.label} must be a hex colour like #2563EB` });
@@ -32,8 +44,14 @@ export function validateValues(fields: TemplateField[], values: Record<string, s
   return issues;
 }
 
+/** Preview links for Head Office's own images on the template. */
+async function imagesOf(t: Template): Promise<Record<string, string>> {
+  const withImage = fieldsOf(t).filter((f) => f.type === "image" && f.default?.startsWith(HQ_IMAGE_PREFIX));
+  return Object.fromEntries(await Promise.all(withImage.map(async (f) => [f.key, await presignGet(f.default!)] as const)));
+}
+
 async function toTemplateDto(t: Template, platform = true) {
-  return { id: t.id, name: t.name, category: t.category, orientation: t.orientation, fields: fieldsOf(t), isGlobal: t.isGlobal, usedIn: await prisma.templateInstance.count({ where: { templateId: t.id } }), createdAt: t.createdAt.toISOString(), ...(platform ? { audience: audienceOf(t.audience) } : {}) };
+  return { images: await imagesOf(t), id: t.id, name: t.name, category: t.category, orientation: t.orientation, fields: fieldsOf(t), isGlobal: t.isGlobal, usedIn: await prisma.templateInstance.count({ where: { templateId: t.id } }), createdAt: t.createdAt.toISOString(), ...(platform ? { audience: audienceOf(t.audience) } : {}) };
 }
 
 /** `rendered`: the output matches the current values. `rendering`: a render is queued; `outputUrl` may still be the previous output. */
@@ -41,13 +59,24 @@ async function toInstanceDto(i: TemplateInstance & { template: { name: string } 
   return { id: i.id, templateId: i.templateId, templateName: i.template.name, name: i.name, values: i.values as Record<string, string>, outputUrl: i.outputKey ? await presignGet(i.outputKey) : null, rendered: !!i.outputKey && !i.renderPending, rendering: i.renderPending, createdAt: i.createdAt.toISOString(), updatedAt: i.updatedAt.toISOString() };
 }
 
-/** Image fields take the ID of a ready image in the company's media library. */
+/** Image fields the location fills take the ID of a ready image in its media library. */
 async function assertImageValues(companyId: string, fields: TemplateField[], values: Record<string, string>) {
-  const picked = fields.filter((f) => f.type === "image" && values[f.key]?.trim()).map((f) => ({ key: f.key, id: values[f.key]!.trim() }));
+  const picked = fields.filter((f) => f.type === "image" && !f.locked && values[f.key]?.trim()).map((f) => ({ key: f.key, id: values[f.key]!.trim() }));
   if (!picked.length) return;
   const found = new Set((await prisma.mediaAsset.findMany({ where: { companyId, id: { in: picked.map((p) => p.id) }, type: "IMAGE", status: "READY" }, select: { id: true } })).map((a) => a.id));
   const bad = picked.filter((p) => !found.has(p.id));
   if (bad.length) throw new ValidationError("Template values are invalid", bad.map((b) => ({ path: b.key, message: "Choose a ready image from the media library" })), "TEMPLATE_VALUES_INVALID");
+}
+
+/** Every Head Office image named on the template has been uploaded and is a PNG or JPEG. */
+async function assertHeadOfficeImages(fields: { type: string; default?: string }[]) {
+  const issues: { path: string; message: string }[] = [];
+  await Promise.all(fields.map(async (f, i) => {
+    if (f.type !== "image" || !f.default) return;
+    const head = await headObject(f.default);
+    if (!head || !["image/png", "image/jpeg"].includes(head.contentType ?? "")) issues.push({ path: `body.fields.${i}.default`, message: "Upload the image again; it was not found" });
+  }));
+  if (issues.length) throw new ValidationError("A Head Office image is missing", issues, "TEMPLATE_IMAGE_MISSING");
 }
 
 async function findInstance(companyId: string, id: string) {
@@ -78,6 +107,7 @@ export const templatesService = {
     const keys = body.fields.map((f) => f.key);
     if (new Set(keys).size !== keys.length) throw new ValidationError("Field keys must be unique", undefined, "DUPLICATE_FIELD");
     await assertAudienceExists(body.audience);
+    await assertHeadOfficeImages(body.fields);
     const t = await prisma.template.create({ data: { name: body.name, category: body.category, orientation: body.orientation, fields: body.fields, isGlobal: true, audience: body.audience } });
     await logActivity({ actor, action: "template.created", resourceType: "template", resourceId: t.id, summary: `Template "${t.name}" created` });
     return toTemplateDto(t);
@@ -90,7 +120,17 @@ export const templatesService = {
     const used = await prisma.templateInstance.count({ where: { templateId: id } });
     if (used) throw new ConflictError(`Template is used by ${used} instance${used > 1 ? "s" : ""}`, "TEMPLATE_IN_USE");
     await prisma.template.delete({ where: { id } });
+    // Head Office's images belong to this template alone.
+    await Promise.all(fieldsOf(t).filter((f) => f.type === "image" && f.default?.startsWith(HQ_IMAGE_PREFIX)).map((f) => deleteObject(f.default!).catch(() => undefined)));
     await logActivity({ actor, action: "template.deleted", resourceType: "template", resourceId: id, summary: `Template "${t.name}" deleted` });
+  },
+
+  /** Step 1 of adding Head Office's image to a template field: a presigned PUT under the Head Office prefix. */
+  async imageUploadUrl(body: z.infer<typeof templateImageUploadBody>) {
+    const name = body.fileName.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+    const key = `${HQ_IMAGE_PREFIX}${nanoid(12)}/${name}`;
+    const expiresInSec = 15 * 60;
+    return { key, uploadUrl: await presignPut(key, body.contentType, expiresInSec), previewUrl: await presignGet(key), expiresInSec };
   },
 
   async listInstances(scope: TenantScope) {

@@ -2724,6 +2724,14 @@
                     "cover",
                     "contain"
                   ]
+                },
+                "locked": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "default": {
+                  "type": "string",
+                  "maxLength": 2000
                 }
               },
               "required": [
@@ -2744,6 +2752,13 @@
           },
           "audience": {
             "$ref": "#/components/schemas/TargetAudience"
+          },
+          "images": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Field key → preview URL of Head Office's image for it"
           }
         },
         "required": [
@@ -2754,7 +2769,8 @@
           "fields",
           "isGlobal",
           "usedIn",
-          "createdAt"
+          "createdAt",
+          "images"
         ]
       },
       "TargetAudience": {
@@ -2935,6 +2951,14 @@
                     "cover",
                     "contain"
                   ]
+                },
+                "locked": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "default": {
+                  "type": "string",
+                  "maxLength": 2000
                 }
               },
               "required": [
@@ -3025,6 +3049,57 @@
           "category",
           "fields"
         ]
+      },
+      "TemplateImageUpload": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "uploadUrl": {
+            "type": "string"
+          },
+          "previewUrl": {
+            "type": "string"
+          },
+          "expiresInSec": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "uploadUrl",
+          "previewUrl",
+          "expiresInSec"
+        ]
+      },
+      "TemplateImageUploadBody": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg"
+            ]
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20971520
+          }
+        },
+        "required": [
+          "fileName",
+          "contentType",
+          "sizeBytes"
+        ],
+        "additionalProperties": false
       },
       "UpdateTemplateBody": {
         "type": "object",
@@ -9366,6 +9441,55 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/templates/images/upload-url": {
+      "post": {
+        "tags": [
+          "Templates"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Super Admin only. A presigned PUT for a Head Office image to set on a template field (`default`).",
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateImageUploadBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TemplateImageUpload"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
                 }
               }
             }

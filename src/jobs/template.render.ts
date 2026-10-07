@@ -6,6 +6,7 @@ import { emitToCompany } from "../core/realtime/server.js";
 import { deleteObject, getObjectBuffer, putObject } from "../core/storage/s3.js";
 import { renderTemplate } from "../modules/templates/templates.render.js";
 import { templateField } from "../modules/templates/templates.schemas.js";
+import { effectiveValues } from "../modules/templates/templates.service.js";
 
 /**
  * Renders a template instance to a PNG at the target resolution and swaps it in. The previous
@@ -16,20 +17,23 @@ export async function templateRender(data: { instanceId: string; companyId: stri
   const instance = await prisma.templateInstance.findUnique({ where: { id: data.instanceId }, include: { template: true } });
   if (!instance || (!instance.renderPending && instance.outputKey)) return;
   const fields = (instance.template.fields as unknown[]).map((f) => templateField.parse(f));
-  const values = instance.values as Record<string, string>;
+  const own = instance.values as Record<string, string>;
+  const values = effectiveValues(fields, own);
   try {
-    // Image fields hold media asset IDs; one deleted since it was chosen, or whose file can't be
-    // read, is left out rather than failing the whole render.
-    const imageIds = fields.filter((f) => f.type === "image" && values[f.key]).map((f) => values[f.key]!);
+    // An image is the location's media asset ID, or Head Office's own image when the field is
+    // locked or the location left it blank. One that is gone or unreadable is left out rather
+    // than failing the whole render.
+    const fromLibrary = (f: (typeof fields)[number]) => !f.locked && !!own[f.key]?.trim();
+    const imageIds = fields.filter((f) => f.type === "image" && fromLibrary(f)).map((f) => own[f.key]!);
     const assets = await prisma.mediaAsset.findMany({ where: { id: { in: imageIds }, companyId: instance.companyId, type: "IMAGE", status: "READY" }, select: { id: true, storageKey: true } });
     const images = new Map<string, Buffer>();
     for (const f of fields.filter((x) => x.type === "image")) {
-      const a = assets.find((x) => x.id === values[f.key]);
-      if (!a) continue;
+      const key = fromLibrary(f) ? assets.find((x) => x.id === own[f.key])?.storageKey : f.default;
+      if (!key) continue;
       try {
-        images.set(f.key, await getObjectBuffer(a.storageKey));
+        images.set(f.key, await getObjectBuffer(key));
       } catch (err) {
-        logger.warn({ err, instanceId: instance.id, assetId: a.id }, "template image unavailable; rendering without it");
+        logger.warn({ err, instanceId: instance.id, key }, "template image unavailable; rendering without it");
       }
     }
     const out = await renderTemplate({ orientation: instance.template.orientation, fields, values, images });
