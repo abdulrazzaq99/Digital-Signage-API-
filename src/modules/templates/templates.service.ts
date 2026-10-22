@@ -11,7 +11,7 @@ import { assertNameFree } from "../../core/validation/names.js";
 import { nanoid } from "nanoid";
 import { deleteObject, headObject, presignGet, presignPut } from "../../core/storage/s3.js";
 import type { Prisma, Template, TemplateInstance } from "../../generated/prisma/client.js";
-import { assertAudienceExists, audienceOf, audienceWhere, viewerOf } from "../../core/targeting/audience.js";
+import { assertAudienceExists, audienceOf, audienceWhere, companiesIn, viewerOf, type TargetAudience } from "../../core/targeting/audience.js";
 import { HQ_IMAGE_PREFIX, templateField, type TemplateField, type templateImageUploadBody, type createInstanceBody, type createTemplateBody, type updateInstanceBody, type updateTemplateBody } from "./templates.schemas.js";
 import type { publishBody } from "../playlists/playlists.schemas.js";
 
@@ -79,6 +79,32 @@ async function assertHeadOfficeImages(fields: { type: string; default?: string }
   if (issues.length) throw new ValidationError("A Head Office image is missing", issues, "TEMPLATE_IMAGE_MISSING");
 }
 
+/**
+ * Tells the locations that can now use a template, in their portal notifications. On a change of
+ * audience only the locations it newly reaches are told, so nobody hears about the same template twice.
+ */
+async function announceTemplate(t: Template, before?: TargetAudience) {
+  let audience: TargetAudience = audienceOf(t.audience);
+  if (before) {
+    const [was, now] = await Promise.all([companiesIn(before), companiesIn(audience)]);
+    if (was === "all") return;
+    const reach = now === "all" ? (await prisma.company.findMany({ select: { id: true } })).map((c) => c.id) : now;
+    const added = reach.filter((id) => !was.includes(id));
+    if (!added.length) return;
+    audience = { kind: "companies", companyIds: added };
+  }
+  const n = await prisma.notification.create({
+    data: {
+      title: `New template: ${t.name}`.slice(0, 120),
+      body: "Head Office has shared a ready-made template with you. Add your own details and publish it to your screens.",
+      type: "announcement",
+      audience,
+      deepLink: `/portal/layouts/templates/${t.id}`,
+    },
+  });
+  await enqueue(JobNames.notificationSend, { notificationId: n.id });
+}
+
 async function findInstance(companyId: string, id: string) {
   const i = await prisma.templateInstance.findFirst({ where: { id, companyId }, include: { template: true } });
   if (!i) throw new NotFoundError("Template instance");
@@ -94,10 +120,12 @@ export const templatesService = {
   },
 
   async update(actor: AuthUser, id: string, body: z.infer<typeof updateTemplateBody>) {
-    if (!(await prisma.template.count({ where: { id } }))) throw new NotFoundError("Template");
+    const existing = await prisma.template.findUnique({ where: { id }, select: { audience: true } });
+    if (!existing) throw new NotFoundError("Template");
     await assertAudienceExists(body.audience);
     const t = await prisma.template.update({ where: { id }, data: { audience: body.audience } });
     await logActivity({ actor, action: "template.updated", resourceType: "template", resourceId: id, summary: `Template "${t.name}" audience changed` });
+    await announceTemplate(t, audienceOf(existing.audience));
     return toTemplateDto(t);
   },
 
@@ -110,6 +138,7 @@ export const templatesService = {
     await assertHeadOfficeImages(body.fields);
     const t = await prisma.template.create({ data: { name: body.name, category: body.category, orientation: body.orientation, fields: body.fields, isGlobal: true, audience: body.audience } });
     await logActivity({ actor, action: "template.created", resourceType: "template", resourceId: t.id, summary: `Template "${t.name}" created` });
+    await announceTemplate(t);
     return toTemplateDto(t);
   },
 

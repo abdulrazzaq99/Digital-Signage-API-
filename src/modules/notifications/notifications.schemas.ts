@@ -32,7 +32,7 @@ export const listNotificationsQuery = paginationQuery;
 
 export const notificationDto = z.object({ id: z.string(), title: z.string(), body: z.string(), type: notificationType, targetId: z.string().nullable(), audience, deepLink: z.string().nullable(), scheduledAt: z.string().nullable(), sentAt: z.string().nullable(), providerId: z.string().nullable(), createdAt: z.string() }).openapi("Notification");
 /** What a recipient sees: no audience or delivery details. */
-export const inboxItemDto = z.object({ id: z.string(), title: z.string(), body: z.string(), type: notificationType, targetId: z.string().nullable(), sentAt: z.string(), createdAt: z.string() }).openapi("InboxNotification");
+export const inboxItemDto = z.object({ id: z.string(), title: z.string(), body: z.string(), type: notificationType, targetId: z.string().nullable(), deepLink: z.string().nullable(), sentAt: z.string(), createdAt: z.string() }).openapi("InboxNotification");
 
 const tag = ["Notifications"];
 const sec = [{ bearerAuth: [] }];

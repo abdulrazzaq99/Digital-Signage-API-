@@ -4962,6 +4962,10 @@
             "type": "string",
             "nullable": true
           },
+          "deepLink": {
+            "type": "string",
+            "nullable": true
+          },
           "sentAt": {
             "type": "string"
           },
@@ -4975,6 +4979,7 @@
           "body",
           "type",
           "targetId",
+          "deepLink",
           "sentAt",
           "createdAt"
         ]

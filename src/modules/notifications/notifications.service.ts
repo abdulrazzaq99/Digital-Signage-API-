@@ -14,7 +14,7 @@ function toDto(n: Notification) {
 }
 
 function toInboxDto(n: Notification) {
-  return { id: n.id, title: n.title, body: n.body, type: n.type, targetId: n.targetId, sentAt: (n.sentAt ?? n.createdAt).toISOString(), createdAt: n.createdAt.toISOString() };
+  return { id: n.id, title: n.title, body: n.body, type: n.type, targetId: n.targetId, deepLink: n.deepLink, sentAt: (n.sentAt ?? n.createdAt).toISOString(), createdAt: n.createdAt.toISOString() };
 }
 
 /** Sent notifications whose audience includes the user: everyone, their company's category, their company, or them by ID. */

@@ -140,4 +140,30 @@ describe("content aimed at locations", () => {
     expect(await titles(w.bar, "/api/v1/notifications/inbox")).toEqual(["New menu"]);
     expect(await titles(w.kioskA, "/api/v1/notifications/inbox")).toEqual([]);
   });
+
+  it("tells each location once when a template becomes available to it", async () => {
+    const w = await world();
+    const inbox = "/api/v1/notifications/inbox";
+    const sendQueued = async () => { for (const n of await prisma.notification.findMany({ where: { sentAt: null } })) await notificationSend({ notificationId: n.id }); };
+    const t = await api().post("/api/v1/templates").set(w.admin.auth).send({ name: "Extra Gum", category: "Promotion", fields: [{ key: "price", label: "Price", type: "text" }], audience: { kind: "categories", categoryIds: [w.restaurant.id] } });
+    expect(t.status).toBe(201);
+    await sendQueued();
+    const note = (await api().get(inbox).set(w.bar.auth)).body.data;
+    expect(note).toEqual([expect.objectContaining({ title: "New template: Extra Gum", deepLink: `/portal/layouts/templates/${t.body.data.id}` })]);
+    expect(await titles(w.kioskA, inbox)).toEqual([]);
+
+    // Adding a kiosk tells only that kiosk; saving the same audience again tells no one.
+    const setAudience = async (audience: unknown) => expect((await api().patch(`/api/v1/templates/${t.body.data.id}`).set(w.admin.auth).send({ audience })).status).toBe(200);
+    await setAudience({ kind: "companies", companyIds: [w.bar.company.id, w.kioskA.company.id] });
+    await setAudience({ kind: "companies", companyIds: [w.bar.company.id, w.kioskA.company.id] });
+    await sendQueued();
+    expect(await titles(w.bar, inbox)).toEqual(["New template: Extra Gum"]);
+    expect(await titles(w.kioskA, inbox)).toEqual(["New template: Extra Gum"]);
+    expect(await titles(w.kioskB, inbox)).toEqual([]);
+
+    // Opening it to everyone reaches the one location that didn't have it yet.
+    await setAudience({ kind: "all" });
+    await sendQueued();
+    for (const ctx of [w.bar, w.kioskA, w.kioskB]) expect(await titles(ctx, inbox)).toEqual(["New template: Extra Gum"]);
+  });
 });
